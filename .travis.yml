@@ -1,0 +1,12 @@
+language: rust
+dist: xenial
+sudo: required
+
+rust:
+- stable
+- beta
+- nightly
+addons:
+  apt:
+    packages:
+    - libzbar-dev
