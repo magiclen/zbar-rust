@@ -1,8 +1,5 @@
 extern crate zbar_rust;
 extern crate qrcode_generator;
-extern crate png;
-
-use std::io::Cursor;
 
 use zbar_rust::{ZBarConfig, ZBarSymbolType, ZBarImageScanner};
 
@@ -18,13 +15,7 @@ fn decode_qrcode() {
 
     let size = 512;
 
-    let png = qrcode_generator::to_png_to_vec(url, QrCodeEcc::Low, size).unwrap();
-
-    let decoder = png::Decoder::new(Cursor::new(png));
-
-    let (info, mut reader) = decoder.read_info().unwrap();
-    let mut data: Vec<u8> = vec![0; info.buffer_size()];
-    reader.next_frame(&mut data).unwrap();
+    let data = qrcode_generator::to_image(url, QrCodeEcc::Low, size).unwrap();
 
     let mut result = scanner.scan_y800(&data, size as u32, size as u32).unwrap();
 
