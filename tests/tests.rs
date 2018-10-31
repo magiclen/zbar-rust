@@ -23,10 +23,10 @@ fn decode_qrcode() {
     let decoder = png::Decoder::new(Cursor::new(png));
 
     let (info, mut reader) = decoder.read_info().unwrap();
-    let mut buf: Vec<u8> = vec![0; info.buffer_size()];
-    reader.next_frame(&mut buf).unwrap();
+    let mut data: Vec<u8> = vec![0; info.buffer_size()];
+    reader.next_frame(&mut data).unwrap();
 
-    let mut result = scanner.scan_y800(Cursor::new(buf), size as u32, size as u32).unwrap();
+    let mut result = scanner.scan_y800(&data, size as u32, size as u32).unwrap();
 
     assert_eq!(1, result.len());
     assert_eq!(ZBarSymbolType::ZBarQRCode, result[0].symbol_type);

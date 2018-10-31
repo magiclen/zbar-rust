@@ -17,8 +17,6 @@ extern crate enum_ordinalize;
 
 extern crate libc;
 
-use std::io::{self, Read, ErrorKind};
-use std::mem::transmute;
 use std::ptr;
 
 use libc::{c_void, c_int, c_char, c_uint, c_ulong};
@@ -194,12 +192,16 @@ impl ZBarImage {
         }
     }
 
-    pub fn destroy(&mut self) {
-        if !self.image.is_null() {
-            unsafe {
-                zbar_image_destroy(self.image);
-                self.image = ptr::null_mut();
-            }
+    pub fn set_ref(&mut self, r: isize) {
+        unsafe {
+            zbar_image_ref(self.image, r as c_int);
+        }
+    }
+
+    pub fn destroy(mut self) {
+        unsafe {
+            zbar_image_destroy(self.image);
+            self.image = ptr::null_mut();
         }
     }
 }
@@ -251,7 +253,7 @@ mod symbol_tests {
 extern "C" {
     pub fn zbar_image_scanner_create() -> *mut c_void;
     pub fn zbar_image_scanner_destroy(scanner: *mut c_void);
-    pub fn zbar_image_scanner_set_data_handler(scanner: *mut c_void, handler: unsafe extern fn(*mut c_void), userdata: *const c_void);
+    pub fn zbar_image_scanner_set_data_handler(scanner: *mut c_void, handler: *const c_void, userdata: *const c_void);
     pub fn zbar_image_scanner_set_config(scanner: *mut c_void, symbology: c_int, config: c_int, value: c_int) -> c_int;
     pub fn zbar_image_scanner_parse_config(scanner: *mut c_void, config_string: *const c_char) -> c_int;
     pub fn zbar_image_scanner_enable_cache(scanner: *mut c_void, enable: c_int);
@@ -292,19 +294,25 @@ impl ZBarImageScanner {
         }
     }
 
-    pub fn scan_y800<R: Read>(&mut self, reader: R, width: u32, height: u32) -> Result<Vec<ZBarImageScanResult>, io::Error> {
-        let format: u32 = unsafe { transmute([b'Y', b'8', b'0', b'0']) };
-        self.scan(reader, width, height, format)
+    pub fn destroy(mut self) {
+        unsafe {
+            zbar_image_scanner_destroy(self.scanner);
+            self.scanner = ptr::null_mut();
+        }
     }
 
-    pub fn scan_gray<R: Read>(&mut self, reader: R, width: u32, height: u32) -> Result<Vec<ZBarImageScanResult>, io::Error> {
-        let format: u32 = unsafe { transmute([b'G', b'R', b'A', b'Y']) };
-        self.scan(reader, width, height, format)
+    pub fn scan_y800<D: AsRef<[u8]>>(&mut self, data: D, width: u32, height: u32) -> Result<Vec<ZBarImageScanResult>, &'static str> {
+//        let format: u32 = unsafe { transmute([b'Y', b'8', b'0', b'0']) };
+        self.scan(data, width, height, 808466521)
     }
 
-    pub fn scan<R: Read>(&mut self, mut reader: R, width: u32, height: u32, format: u32) -> Result<Vec<ZBarImageScanResult>, io::Error> {
-        let mut data = Vec::new();
-        reader.read_to_end(&mut data)?;
+    pub fn scan_gray<D: AsRef<[u8]>>(&mut self, data: D, width: u32, height: u32) -> Result<Vec<ZBarImageScanResult>, &'static str> {
+//        let format: u32 = unsafe { transmute([b'G', b'R', b'A', b'Y']) };
+        self.scan(data, width, height, 1497453127)
+    }
+
+    pub fn scan<D: AsRef<[u8]>>(&mut self, data: D, width: u32, height: u32, format: u32) -> Result<Vec<ZBarImageScanResult>, &'static str> {
+        let data = data.as_ref();
 
         let mut image = ZBarImage::new();
 
@@ -318,7 +326,7 @@ impl ZBarImageScanner {
         let n = unsafe { zbar_scan_image(self.scanner, image.image) };
 
         if n < 0 {
-            return Err(io::Error::new(ErrorKind::Other, "incorrect image"));
+            return Err("incorrect image");
         }
 
         let mut result_array = Vec::with_capacity(n as usize);
