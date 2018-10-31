@@ -167,10 +167,6 @@ pub struct ZBarImage {
     image: *mut c_void,
 }
 
-unsafe impl Send for ZBarImage {}
-
-unsafe impl Sync for ZBarImage {}
-
 impl ZBarImage {
     pub fn new() -> ZBarImage {
         let image = unsafe { zbar_image_create() };
@@ -271,10 +267,6 @@ pub struct ZBarImageScanResult {
 pub struct ZBarImageScanner {
     scanner: *mut c_void,
 }
-
-unsafe impl Send for ZBarImageScanner {}
-
-unsafe impl Sync for ZBarImageScanner {}
 
 impl ZBarImageScanner {
     pub fn new() -> ZBarImageScanner {
