@@ -10,6 +10,10 @@ description= "High-level and low-level ZBar binding for the Rust language."
 readme = "README.md"
 license = "LGPL-2.1"
 
+[badges]
+travis-ci = { repository = "magiclen/zbar-rust", branch = "master" }
+appveyor = { repository = "magiclen/zbar-rust", branch = "master", service = "github" }
+
 [dependencies]
 libc = "0.2.43"
 enum-ordinalize = "2.0.5"
