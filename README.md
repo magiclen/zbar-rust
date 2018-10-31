@@ -1,7 +1,8 @@
-OpenCC Rust
+ZBar Rust
 ====================
 
 [![Build Status](https://travis-ci.org/magiclen/zbar-rust.svg?branch=master)](https://travis-ci.org/magiclen/zbar-rust)
+[![Build status](https://ci.appveyor.com/api/projects/status/8jpi310odv26f2pv/branch/master?svg=true)](https://ci.appveyor.com/project/magiclen/zbar-rust/branch/master)
 
 High-level and low-level ZBar binding for the Rust language.
 
