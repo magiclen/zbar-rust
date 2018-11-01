@@ -11,4 +11,4 @@ addons:
     packages:
     - libzbar-dev
 install:
-- sudo ln -s /usr/lib/x86_64-linux-gnu/libzbar.a /usr/lib
+- sudo ln -s /usr/lib/x86_64-linux-gnu/libzbar.so /usr/lib
