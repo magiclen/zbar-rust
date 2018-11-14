@@ -1,16 +1,43 @@
-//! High-level and low-level ZBar binding for the Rust language.
-//!
-//! ## Compilation
-//!
-//! To compile this crate, you need to compile the ZBar library first. You can install ZBar in your operating system, or in somewhere in your file system. As for the latter, you need to set the following environment variables to link the ZBar library:
-//!
-//! * `ZBAR_LIB_DIRS`: The directories of library files, like `-L`. Use `:` to separate.
-//! * `ZBAR_LIBS`: The library names that you want to link, like `-l`. Use `:` to separate. Typically, it is **iconv:zbar**.
-//! * `ZBAR_INCLUDE_DIRS`: The directories of header files, like `-i`. Use `:` to separate.
-//!
-//! ## Examples
-//!
-//! See `tests/tests.rs`.
+/*!
+High-level and low-level ZBar binding for the Rust language.
+
+## Compilation
+
+To compile this crate, you need to compile the ZBar library first. You can install ZBar in your operating system, or in somewhere in your file system. As for the latter, you need to set the following environment variables to link the ZBar library:
+
+* `ZBAR_LIB_DIRS`: The directories of library files, like `-L`. Use `:` to separate.
+* `ZBAR_LIBS`: The library names that you want to link, like `-l`. Use `:` to separate. Typically, it is **iconv:zbar**.
+* `ZBAR_INCLUDE_DIRS`: The directories of header files, like `-i`. Use `:` to separate.
+
+## Examples
+
+```rust,ignore
+extern crate zbar_rust;
+extern crate image;
+
+use zbar_rust::ZBarImageScanner;
+
+use image::GenericImageView;
+
+let img = image::open(INPUT_IMAGE_PATH).unwrap();
+
+let (width, height) = img.dimensions();
+
+let luma_img = img.to_luma();
+
+let luma_img_data: Vec<u8> = luma_img.to_vec();
+
+let mut scanner = ZBarImageScanner::new();
+
+let results = scanner.scan_y800(&luma_img_data, width, height).unwrap();
+
+for result in results {
+    println!("{}", String::from_utf8(result.data).unwrap())
+}
+```
+
+More examples are in the `examples` folder.
+*/
 
 #[macro_use]
 extern crate enum_ordinalize;
@@ -113,22 +140,6 @@ extern "C" {
     pub fn zbar_set_verbosity(verbosity: c_int);
 }
 
-#[cfg(test)]
-mod gereral_tests {
-    use super::*;
-
-    #[test]
-    fn test_version() {
-        let mut major = 0;
-        let mut minor = 0;
-        let result = unsafe { zbar_version(&mut major, &mut minor) };
-
-        assert_eq!(0, result);
-        assert_eq!(0, major);
-        assert!(minor >= 10 && minor <= 20);
-    }
-}
-
 // TODO: ----- General Interface END-----
 
 // TODO: ----- Image Interface START-----
@@ -202,16 +213,6 @@ impl ZBarImage {
     }
 }
 
-#[cfg(test)]
-mod image_tests {
-    use super::*;
-
-    #[test]
-    fn test_image_create_destroy() {
-        let _zbar = ZBarImage::new();
-    }
-}
-
 // TODO: ----- Image Interface END-----
 
 // TODO: ----- Symbol Interface START-----
@@ -234,11 +235,6 @@ extern "C" {
     pub fn zbar_symbol_get_components(symbol: *const c_void) -> *const c_void;
     pub fn zbar_symbol_first_component(symbol: *const c_void) -> *const c_void;
     pub fn zbar_symbol_xml(symbol: *const c_void, buffer: *mut (*mut c_char), buflen: *mut c_uint) -> *mut c_char;
-}
-
-#[cfg(test)]
-mod symbol_tests {
-//    use super::*;
 }
 
 // TODO: ----- Symbol Interface END-----
@@ -357,22 +353,4 @@ impl Drop for ZBarImageScanner {
         }
     }
 }
-
-#[cfg(test)]
-mod image_scanner_tests {
-    use super::*;
-
-    #[test]
-    fn test_image_create_destroy() {
-        let _scanner = ZBarImageScanner::new();
-    }
-
-    #[test]
-    fn test_set_config() {
-        let mut scanner = ZBarImageScanner::new();
-        scanner.set_config(ZBarSymbolType::ZBarNone, ZBarConfig::ZBarCfgEnable, 0).unwrap();
-        scanner.set_config(ZBarSymbolType::ZBarQRCode, ZBarConfig::ZBarCfgEnable, 1).unwrap();
-    }
-}
-
 // TODO: ----- Image Scanner Interface END-----

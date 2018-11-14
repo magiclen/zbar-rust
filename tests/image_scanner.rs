@@ -6,10 +6,20 @@ use zbar_rust::{ZBarConfig, ZBarSymbolType, ZBarImageScanner};
 use qrcode_generator::QrCodeEcc;
 
 #[test]
-fn decode_qrcode() {
+fn image_create_destroy() {
+    let _scanner = ZBarImageScanner::new();
+}
+
+#[test]
+fn set_config() {
     let mut scanner = ZBarImageScanner::new();
     scanner.set_config(ZBarSymbolType::ZBarNone, ZBarConfig::ZBarCfgEnable, 0).unwrap();
     scanner.set_config(ZBarSymbolType::ZBarQRCode, ZBarConfig::ZBarCfgEnable, 1).unwrap();
+}
+
+#[test]
+fn decode_qrcode() {
+    let mut scanner = ZBarImageScanner::new();
 
     let url = "https://magiclen.org";
 

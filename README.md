@@ -16,7 +16,32 @@ To compile this crate, you need to compile the ZBar library first. You can insta
 
 ## Examples
 
-See `tests/tests.rs`.
+```rust
+extern crate zbar_rust;
+extern crate image;
+
+use zbar_rust::ZBarImageScanner;
+
+use image::GenericImageView;
+
+let img = image::open(INPUT_IMAGE_PATH).unwrap();
+
+let (width, height) = img.dimensions();
+
+let luma_img = img.to_luma();
+
+let luma_img_data: Vec<u8> = luma_img.to_vec();
+
+let mut scanner = ZBarImageScanner::new();
+
+let results = scanner.scan_y800(&luma_img_data, width, height).unwrap();
+
+for result in results {
+    println!("{}", String::from_utf8(result.data).unwrap())
+}
+```
+
+More examples are in the `examples` folder.
 
 ## Crates.io
 
