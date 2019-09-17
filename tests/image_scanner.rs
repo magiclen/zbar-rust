@@ -1,7 +1,7 @@
-extern crate zbar_rust;
 extern crate qrcode_generator;
+extern crate zbar_rust;
 
-use zbar_rust::{ZBarConfig, ZBarSymbolType, ZBarImageScanner};
+use zbar_rust::{ZBarConfig, ZBarImageScanner, ZBarSymbolType};
 
 use qrcode_generator::QrCodeEcc;
 
