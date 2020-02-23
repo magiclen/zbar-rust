@@ -267,7 +267,7 @@ extern {
     pub fn zbar_symbol_first_component(symbol: *const c_void) -> *const c_void;
     pub fn zbar_symbol_xml(
         symbol: *const c_void,
-        buffer: *mut (*mut c_char),
+        buffer: *mut *mut c_char,
         buflen: *mut c_uint,
     ) -> *mut c_char;
 }
