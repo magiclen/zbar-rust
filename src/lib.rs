@@ -50,12 +50,16 @@ use std::ptr;
 
 use libc::{c_char, c_int, c_uint, c_ulong, c_void};
 
-create_ordinalized_enum!(pub ZBarColor,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
+#[repr(isize)]
+pub enum ZBarColor {
     ZBarSpace = 0,
     ZBarBar = 1,
-);
+}
 
-create_ordinalized_enum!(pub ZBarSymbolType,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
+#[repr(isize)]
+pub enum ZBarSymbolType {
     ZBarNone = 0,
     ZBarPartial = 1,
     ZBarEAN2 = 2,
@@ -80,17 +84,21 @@ create_ordinalized_enum!(pub ZBarSymbolType,
     ZBarAddOn2 = 0x0200,
     ZBarAddOn5 = 0x0500,
     ZBarAddOn = 0x0700,
-);
+}
 
-create_ordinalized_enum!(pub ZBarOrientation,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
+#[repr(isize)]
+pub enum ZBarOrientation {
     ZBarOrientUnknown = -1,
     ZBarOrientUp = 0,
     ZBarOrientRight = 1,
     ZBarOrientDown = 2,
-    ZBarOrientLeft = 3
-);
+    ZBarOrientLeft = 3,
+}
 
-create_ordinalized_enum!(pub ZBarError,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
+#[repr(isize)]
+pub enum ZBarError {
     ZBarOK,
     ZBarErrNoMem,
     ZBarErrInternal,
@@ -103,10 +111,12 @@ create_ordinalized_enum!(pub ZBarError,
     ZBarErrXProto,
     ZBarErrClosed,
     ZBarErrWinAPI,
-    ZBarErrNum
-);
+    ZBarErrNum,
+}
 
-create_ordinalized_enum!(pub ZBarConfig,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
+#[repr(isize)]
+pub enum ZBarConfig {
     ZBarCfgEnable = 0,
     ZBarCfgAddCheck = 1,
     ZBarCfgEmitCheck = 2,
@@ -116,23 +126,27 @@ create_ordinalized_enum!(pub ZBarConfig,
     ZBarCfgMaxLen = 0x21,
     ZBarCfgPosition = 0x80,
     ZBarCfgXDensity = 0x100,
-    ZBarCfgYDensity = 0x101
-);
+    ZBarCfgYDensity = 0x101,
+}
 
-create_ordinalized_enum!(pub ZBarModifier,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
+#[repr(isize)]
+pub enum ZBarModifier {
     ZBarModGS1,
     ZBarModAIM,
-    ZBarModNum
-);
+    ZBarModNum,
+}
 
-create_ordinalized_enum!(pub VideoControlType,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
+#[repr(isize)]
+pub enum VideoControlType {
     VideoCntlInteger = 1,
     VideoCntlMenu = 2,
     VideoCntlButton = 3,
     VideoCntlInteger64 = 4,
     VideoCntlString = 5,
     VideoCntlBoolean = 6,
-);
+}
 
 // TODO: ----- General Interface START-----
 

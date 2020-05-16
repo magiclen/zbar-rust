@@ -1,6 +1,6 @@
 [package]
 name = "zbar-rust"
-version = "0.0.8"
+version = "0.0.9"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/zbar-rust"
@@ -17,7 +17,7 @@ branch = "master"
 
 [dependencies]
 libc = "0.2.43"
-enum-ordinalize = "2.0.5"
+enum-ordinalize = "3.1"
 
 [dev-dependencies]
 qrcode-generator = "1.0.6"
