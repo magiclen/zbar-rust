@@ -54,46 +54,46 @@ use libc::{c_char, c_int, c_uint, c_ulong, c_void};
 #[repr(isize)]
 pub enum ZBarColor {
     ZBarSpace = 0,
-    ZBarBar = 1,
+    ZBarBar   = 1,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
 #[repr(isize)]
 pub enum ZBarSymbolType {
-    ZBarNone = 0,
-    ZBarPartial = 1,
-    ZBarEAN2 = 2,
-    ZBarEAN5 = 5,
-    ZBarEAN8 = 8,
-    ZBarUPCE = 9,
-    ZBarISBN10 = 10,
-    ZBarUPCA = 12,
-    ZBarEAN13 = 13,
-    ZBarISBN13 = 14,
-    ZBarComposite = 15,
-    ZBarI25 = 25,
-    ZBarDataBar = 34,
+    ZBarNone       = 0,
+    ZBarPartial    = 1,
+    ZBarEAN2       = 2,
+    ZBarEAN5       = 5,
+    ZBarEAN8       = 8,
+    ZBarUPCE       = 9,
+    ZBarISBN10     = 10,
+    ZBarUPCA       = 12,
+    ZBarEAN13      = 13,
+    ZBarISBN13     = 14,
+    ZBarComposite  = 15,
+    ZBarI25        = 25,
+    ZBarDataBar    = 34,
     ZBarDataBarExp = 35,
-    ZBarCodeBar = 38,
-    ZBarCode39 = 39,
-    ZBarPDF417 = 57,
-    ZBarQRCode = 64,
-    ZBarCode93 = 93,
-    ZBarCode128 = 128,
-    ZBarSymbol = 0x00ff,
-    ZBarAddOn2 = 0x0200,
-    ZBarAddOn5 = 0x0500,
-    ZBarAddOn = 0x0700,
+    ZBarCodeBar    = 38,
+    ZBarCode39     = 39,
+    ZBarPDF417     = 57,
+    ZBarQRCode     = 64,
+    ZBarCode93     = 93,
+    ZBarCode128    = 128,
+    ZBarSymbol     = 0x00ff,
+    ZBarAddOn2     = 0x0200,
+    ZBarAddOn5     = 0x0500,
+    ZBarAddOn      = 0x0700,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
 #[repr(isize)]
 pub enum ZBarOrientation {
     ZBarOrientUnknown = -1,
-    ZBarOrientUp = 0,
-    ZBarOrientRight = 1,
-    ZBarOrientDown = 2,
-    ZBarOrientLeft = 3,
+    ZBarOrientUp      = 0,
+    ZBarOrientRight   = 1,
+    ZBarOrientDown    = 2,
+    ZBarOrientLeft    = 3,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
@@ -117,16 +117,16 @@ pub enum ZBarError {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
 #[repr(isize)]
 pub enum ZBarConfig {
-    ZBarCfgEnable = 0,
-    ZBarCfgAddCheck = 1,
+    ZBarCfgEnable    = 0,
+    ZBarCfgAddCheck  = 1,
     ZBarCfgEmitCheck = 2,
-    ZBarCfgASCII = 3,
-    ZBarCfgNum = 4,
-    ZBarCfgMinLen = 0x20,
-    ZBarCfgMaxLen = 0x21,
-    ZBarCfgPosition = 0x80,
-    ZBarCfgXDensity = 0x100,
-    ZBarCfgYDensity = 0x101,
+    ZBarCfgASCII     = 3,
+    ZBarCfgNum       = 4,
+    ZBarCfgMinLen    = 0x20,
+    ZBarCfgMaxLen    = 0x21,
+    ZBarCfgPosition  = 0x80,
+    ZBarCfgXDensity  = 0x100,
+    ZBarCfgYDensity  = 0x101,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
@@ -140,12 +140,12 @@ pub enum ZBarModifier {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
 #[repr(isize)]
 pub enum VideoControlType {
-    VideoCntlInteger = 1,
-    VideoCntlMenu = 2,
-    VideoCntlButton = 3,
+    VideoCntlInteger   = 1,
+    VideoCntlMenu      = 2,
+    VideoCntlButton    = 3,
     VideoCntlInteger64 = 4,
-    VideoCntlString = 5,
-    VideoCntlBoolean = 6,
+    VideoCntlString    = 5,
+    VideoCntlBoolean   = 6,
 }
 
 // TODO: ----- General Interface START-----
