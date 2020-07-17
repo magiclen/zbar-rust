@@ -25,7 +25,7 @@ fn decode_qrcode() {
 
     let size = 512;
 
-    let data = qrcode_generator::to_image(url, QrCodeEcc::Low, size).unwrap();
+    let data = qrcode_generator::to_image_from_str(url, QrCodeEcc::Low, size).unwrap();
 
     let mut result = scanner.scan_y800(&data, size as u32, size as u32).unwrap();
 
