@@ -314,6 +314,10 @@ extern {
 pub struct ZBarImageScanResult {
     pub symbol_type: ZBarSymbolType,
     pub data: Vec<u8>,
+    pub left: i32,
+    pub top: i32,
+    pub bottom: i32,
+    pub right: i32,
 }
 
 pub struct ZBarImageScanner {
@@ -419,9 +423,34 @@ impl ZBarImageScanner {
                 Vec::from_raw_parts(data as *mut u8, data_length, data_length)
             };
 
+            // extract bounding box
+            let points = unsafe { zbar_symbol_get_loc_size(symbol) as usize };
+            let mut left = 0;
+            let mut right = 0;
+            let mut top = 0;
+            let mut bottom = 0;
+            for i in 0..points {
+                let x = unsafe { zbar_symbol_get_loc_x(symbol, i as u32) };
+                let y = unsafe { zbar_symbol_get_loc_y(symbol, i as u32) };
+                if i == 0 {
+                    left = x;
+                    right = x;
+                    top = x;
+                    bottom = x;
+                }
+                left = left.min(x);
+                right = right.max(x);
+                top = top.min(y);
+                bottom = bottom.max(y);
+            }
+
             let result = ZBarImageScanResult {
                 symbol_type,
                 data,
+                left,
+                right,
+                top,
+                bottom,
             };
 
             result_array.push(result);
