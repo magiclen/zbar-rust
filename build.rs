@@ -151,7 +151,7 @@ fn run_pkg_config() -> pkg_config::Library {
         .unwrap()
         .success()
     {
-        panic!(format!("ZBar version must be no higher than {}", MAX_VERSION));
+        panic!("ZBar version must be no higher than {}", MAX_VERSION);
     }
 
     pkg_config::Config::new().cargo_metadata(false).probe("zbar").unwrap()
