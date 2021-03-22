@@ -3,10 +3,8 @@ extern crate pkg_config;
 use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
-use std::process::Command;
 
 const MIN_VERSION: &str = "0.10";
-const MAX_VERSION: &str = "0.20";
 
 fn main() {
     if cfg!(target_os = "freebsd") {
@@ -143,16 +141,6 @@ fn run_pkg_config() -> pkg_config::Library {
         .atleast_version(MIN_VERSION)
         .probe("zbar")
         .unwrap();
-
-    if !Command::new("pkg-config")
-        .arg(format!("--max-version={}", MAX_VERSION))
-        .arg("zbar")
-        .status()
-        .unwrap()
-        .success()
-    {
-        panic!("ZBar version must be no higher than {}", MAX_VERSION);
-    }
 
     pkg_config::Config::new().cargo_metadata(false).probe("zbar").unwrap()
 }
