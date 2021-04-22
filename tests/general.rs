@@ -7,6 +7,6 @@ fn version() {
     let result = unsafe { zbar_rust::zbar_version(&mut major, &mut minor) };
 
     assert_eq!(0, result);
-    assert_eq!(0, major);
-    assert!(minor >= 10 && minor <= 20);
+
+    assert!(major == 0 && minor >= 10);
 }
