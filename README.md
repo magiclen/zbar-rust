@@ -1,7 +1,7 @@
 ZBar Rust
 ====================
 
-[![Build Status](https://travis-ci.org/magiclen/zbar-rust.svg?branch=master)](https://travis-ci.org/magiclen/zbar-rust)
+[![CI](https://github.com/magiclen/zbar-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/magiclen/zbar-rust/actions/workflows/ci.yml)
 
 High-level and low-level ZBar binding for the Rust language.
 

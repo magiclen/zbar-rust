@@ -1,0 +1,37 @@
+name: CI-version
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+        toolchain:
+          - stable
+          - nightly
+    name: Test ${{ matrix.toolchain }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install libzbar
+        run: |
+          sudo apt update
+          sudo apt install libzbar-dev
+          sudo ln -s /usr/lib/x86_64-linux-gnu/libzbar.so /usr/lib
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
+          override: true
+      - run: cargo build --release
+      - run: cargo test --release
+      - run: cargo doc --release

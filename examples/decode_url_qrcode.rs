@@ -16,7 +16,7 @@ fn main() {
 
     let (width, height) = img.dimensions();
 
-    let luma_img = img.to_luma();
+    let luma_img = img.to_luma8();
 
     let luma_img_data: Vec<u8> = luma_img.to_vec();
 
