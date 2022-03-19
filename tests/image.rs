@@ -1,5 +1,3 @@
-extern crate zbar_rust;
-
 use zbar_rust::ZBarImage;
 
 #[test]

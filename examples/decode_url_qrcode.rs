@@ -1,6 +1,3 @@
-extern crate image;
-extern crate zbar_rust;
-
 use zbar_rust::ZBarImageScanner;
 
 use image::GenericImageView;

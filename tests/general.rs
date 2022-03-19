@@ -1,5 +1,3 @@
-extern crate zbar_rust;
-
 #[test]
 fn version() {
     let mut major = 0;

@@ -12,9 +12,6 @@ To compile this crate, you need to compile the ZBar library first. You can insta
 ## Examples
 
 ```rust,ignore
-extern crate zbar_rust;
-extern crate image;
-
 use zbar_rust::ZBarImageScanner;
 
 use image::GenericImageView;
@@ -43,8 +40,6 @@ More examples are in the `examples` folder.
 
 #[macro_use]
 extern crate enum_ordinalize;
-
-extern crate libc;
 
 use std::ptr;
 

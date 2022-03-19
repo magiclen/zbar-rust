@@ -16,9 +16,6 @@ To compile this crate, you need to compile the ZBar library first. You can insta
 ## Examples
 
 ```rust
-extern crate zbar_rust;
-extern crate image;
-
 use zbar_rust::ZBarImageScanner;
 
 use image::GenericImageView;
