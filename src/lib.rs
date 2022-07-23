@@ -147,7 +147,7 @@ pub enum VideoControlType {
 
 #[link(name = "zbar")]
 extern {
-    pub fn zbar_version(major: *mut c_uint, minor: *mut c_uint) -> c_int;
+    pub fn zbar_version(major: *mut c_uint, minor: *mut c_uint, patch: *mut c_uint) -> c_int;
     pub fn zbar_set_verbosity(verbosity: c_int);
 }
 
