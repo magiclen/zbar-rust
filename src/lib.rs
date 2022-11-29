@@ -406,7 +406,7 @@ impl ZBarImageScanner {
                 image.image,
                 data.as_ptr() as *const c_void,
                 data.len() as c_ulong,
-                zbar_image_free_data_do_nothing as *mut c_void, // `data` is borrowed - do not attempt to free it
+                zbar_image_free_data_do_nothing as *mut c_void, /* `data` is borrowed - do not attempt to free it */
             );
         }
 
