@@ -28,9 +28,9 @@ fn decode_qrcode() {
 
     assert_eq!(1, result.len());
     assert_eq!(ZBarSymbolType::ZBarQRCode, result[0].symbol_type);
-    // assert_eq!(result[0].left, 34);
-    // assert_eq!(result[0].top, 34);
-    // assert_eq!(result[0].right, 479);
-    // assert_eq!(result[0].bottom, 479);
+    assert_eq!(34, result[0].points.iter().map(|(x, _)| *x).min().unwrap()); // left
+    assert_eq!(34, result[0].points.iter().map(|(_, y)| *y).min().unwrap()); // top
+    assert_eq!(479, result[0].points.iter().map(|(x, _)| *x).max().unwrap()); // right
+    assert_eq!(479, result[0].points.iter().map(|(_, y)| *y).max().unwrap()); // bottom
     assert_eq!(url, unsafe { String::from_utf8_unchecked(result.remove(0).data) });
 }

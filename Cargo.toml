@@ -1,6 +1,6 @@
 [package]
 name = "zbar-rust"
-version = "0.0.20"
+version = "0.0.21"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2021"
 repository = "https://github.com/magiclen/zbar-rust"
