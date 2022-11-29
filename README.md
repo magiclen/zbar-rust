@@ -24,13 +24,9 @@ let img = image::open(INPUT_IMAGE_PATH).unwrap();
 
 let (width, height) = img.dimensions();
 
-let luma_img = img.to_luma();
-
-let luma_img_data: Vec<u8> = luma_img.to_vec();
-
 let mut scanner = ZBarImageScanner::new();
 
-let results = scanner.scan_y800(&luma_img_data, width, height).unwrap();
+let mut results = scanner.scan_y800(img.into_luma8().into_raw(), width, height).unwrap();
 
 for result in results {
     println!("{}", String::from_utf8(result.data).unwrap())

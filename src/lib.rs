@@ -20,13 +20,9 @@ let img = image::open(INPUT_IMAGE_PATH).unwrap();
 
 let (width, height) = img.dimensions();
 
-let luma_img = img.to_luma();
-
-let luma_img_data: Vec<u8> = luma_img.to_vec();
-
 let mut scanner = ZBarImageScanner::new();
 
-let results = scanner.scan_y800(&luma_img_data, width, height).unwrap();
+let mut results = scanner.scan_y800(img.into_luma8().into_raw(), width, height).unwrap();
 
 for result in results {
     println!("{}", String::from_utf8(result.data).unwrap())
@@ -427,6 +423,7 @@ impl ZBarImageScanner {
         while !symbol.is_null() {
             let symbol_type = unsafe { zbar_symbol_get_type(symbol) };
             let symbol_type = unsafe { ZBarSymbolType::from_ordinal_unsafe(symbol_type as isize) };
+
             let data = unsafe {
                 let data = zbar_symbol_get_data(symbol);
                 let data_length = zbar_symbol_get_data_length(symbol) as usize;
@@ -434,20 +431,20 @@ impl ZBarImageScanner {
             };
 
             // extract bounding box
-            let points = unsafe { zbar_symbol_get_loc_size(symbol) as usize };
-            let mut left = 0;
-            let mut right = 0;
-            let mut top = 0;
-            let mut bottom = 0;
-            for i in 0..points {
-                let x = unsafe { zbar_symbol_get_loc_x(symbol, i as u32) };
-                let y = unsafe { zbar_symbol_get_loc_y(symbol, i as u32) };
-                if i == 0 {
-                    left = x;
-                    right = x;
-                    top = x;
-                    bottom = x;
-                }
+            let loc_size = unsafe { zbar_symbol_get_loc_size(symbol) };
+
+            // loc_size should always bigger than zero
+            debug_assert!(loc_size > 0);
+
+            let mut left = unsafe { zbar_symbol_get_loc_x(symbol, 0) };
+            let mut right = left;
+            let mut top = unsafe { zbar_symbol_get_loc_y(symbol, 0) };
+            let mut bottom = top;
+
+            for i in 1..loc_size {
+                let x = unsafe { zbar_symbol_get_loc_x(symbol, i) };
+                let y = unsafe { zbar_symbol_get_loc_y(symbol, i) };
+
                 left = left.min(x);
                 right = right.max(x);
                 top = top.min(y);
