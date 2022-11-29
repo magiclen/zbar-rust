@@ -41,7 +41,7 @@ More examples are in the `examples` folder.
 #[macro_use]
 extern crate enum_ordinalize;
 
-use std::ptr;
+use std::{ptr, slice};
 
 use libc::{c_char, c_int, c_uint, c_ulong, c_void};
 
@@ -211,6 +211,8 @@ pub struct ZBarImage {
     image: *mut c_void,
 }
 
+fn zbar_image_free_data_do_nothing(_image: *mut c_void) {}
+
 impl ZBarImage {
     pub fn new() -> ZBarImage {
         let image = unsafe { zbar_image_create() };
@@ -238,10 +240,12 @@ impl ZBarImage {
         }
     }
 
-    pub fn destroy(mut self) {
-        unsafe {
-            zbar_image_destroy(self.image);
-            self.image = ptr::null_mut();
+    pub fn destroy(&mut self) {
+        if !self.image.is_null() {
+            unsafe {
+                zbar_image_destroy(self.image);
+                self.image = ptr::null_mut();
+            }
         }
     }
 }
@@ -250,6 +254,12 @@ impl Default for ZBarImage {
     #[inline]
     fn default() -> Self {
         ZBarImage::new()
+    }
+}
+
+impl Drop for ZBarImage {
+    fn drop(&mut self) {
+        self.destroy();
     }
 }
 
@@ -396,7 +406,7 @@ impl ZBarImageScanner {
                 image.image,
                 data.as_ptr() as *const c_void,
                 data.len() as c_ulong,
-                zbar_image_free_data as *mut c_void,
+                zbar_image_free_data_do_nothing as *mut c_void, // `data` is borrowed - do not attempt to free it
             );
         }
 
@@ -416,7 +426,7 @@ impl ZBarImageScanner {
             let data = unsafe {
                 let data = zbar_symbol_get_data(symbol);
                 let data_length = zbar_symbol_get_data_length(symbol) as usize;
-                Vec::from_raw_parts(data as *mut u8, data_length, data_length)
+                slice::from_raw_parts(data as *mut u8, data_length).to_vec()
             };
 
             let result = ZBarImageScanResult {
