@@ -9,7 +9,6 @@ homepage = "https://magiclen.org/zbar-rust"
 keywords = ["zbar", "qrcode", "scanner", "barcode", "scan"]
 categories = ["external-ffi-bindings", "encoding"]
 description = "High-level and low-level ZBar binding for the Rust language."
-readme = "README.md"
 license = "LGPL-2.1"
 include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "build.rs"]
 
