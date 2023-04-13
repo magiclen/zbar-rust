@@ -1,6 +1,5 @@
-use zbar_rust::{ZBarConfig, ZBarImageScanner, ZBarSymbolType};
-
 use qrcode_generator::QrCodeEcc;
+use zbar_rust::{ZBarConfig, ZBarImageScanner, ZBarSymbolType};
 
 #[test]
 fn image_create_destroy() {

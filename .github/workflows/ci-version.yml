@@ -16,9 +16,12 @@ jobs:
         os:
           - ubuntu-latest
         toolchain:
+          - 1.61
           - stable
           - nightly
-    name: Test ${{ matrix.toolchain }} on ${{ matrix.os }}
+        features:
+          -
+    name: Test ${{ matrix.toolchain }} on ${{ matrix.os }} (${{ matrix.features }})
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install libzbar
@@ -26,13 +29,9 @@ jobs:
           sudo apt update
           sudo apt install libzbar-dev
           sudo ln -s /usr/lib/x86_64-linux-gnu/libzbar.so /usr/lib
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          profile: minimal
           toolchain: ${{ matrix.toolchain }}
-          override: true
-      - run: cargo build --release
-      - run: cargo build --examples --release
-      - run: cargo test --release
-      - run: cargo doc --release
+      - run: cargo test --release ${{ matrix.features }}
+      - run: cargo doc --release ${{ matrix.features }}

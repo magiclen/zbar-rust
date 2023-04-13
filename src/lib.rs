@@ -71,7 +71,7 @@ pub enum ZBarSymbolType {
     ZBarQRCode     = 64,
     ZBarCode93     = 93,
     ZBarCode128    = 128,
-    ZBarSymbol     = 0x00ff,
+    ZBarSymbol     = 0x00FF,
     ZBarAddOn2     = 0x0200,
     ZBarAddOn5     = 0x0500,
     ZBarAddOn      = 0x0700,
@@ -142,7 +142,7 @@ pub enum VideoControlType {
 // TODO: ----- General Interface START-----
 
 #[link(name = "zbar")]
-extern {
+extern "C" {
     pub fn zbar_version(major: *mut c_uint, minor: *mut c_uint, patch: *mut c_uint) -> c_int;
     pub fn zbar_set_verbosity(verbosity: c_int);
 }
@@ -152,7 +152,7 @@ extern {
 // TODO: ----- Image Interface START-----
 
 #[link(name = "zbar")]
-extern {
+extern "C" {
     pub fn zbar_image_create() -> *mut c_void;
     pub fn zbar_image_destroy(image: *mut c_void);
     pub fn zbar_image_ref(image: *mut c_void, refs: c_int);
@@ -264,7 +264,7 @@ impl Drop for ZBarImage {
 // TODO: ----- Symbol Interface START-----
 
 #[link(name = "zbar")]
-extern {
+extern "C" {
     pub fn zbar_symbol_ref(symbol: *const c_void, refs: c_int);
     pub fn zbar_symbol_get_type(symbol: *const c_void) -> c_int;
     pub fn zbar_symbol_get_configs(symbol: *const c_void) -> c_uint;
@@ -292,7 +292,7 @@ extern {
 // TODO: ----- Image Scanner Interface START-----
 
 #[link(name = "zbar")]
-extern {
+extern "C" {
     pub fn zbar_image_scanner_create() -> *mut c_void;
     pub fn zbar_image_scanner_destroy(scanner: *mut c_void);
     pub fn zbar_image_scanner_set_data_handler(
@@ -319,8 +319,8 @@ extern {
 #[derive(Debug)]
 pub struct ZBarImageScanResult {
     pub symbol_type: ZBarSymbolType,
-    pub data: Vec<u8>,
-    pub points: Vec<(i32, i32)>,
+    pub data:        Vec<u8>,
+    pub points:      Vec<(i32, i32)>,
 }
 
 pub struct ZBarImageScanner {

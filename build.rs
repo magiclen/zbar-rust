@@ -1,6 +1,4 @@
-use std::collections::HashSet;
-use std::env;
-use std::path::PathBuf;
+use std::{collections::HashSet, env, path::PathBuf};
 
 const MIN_VERSION: &str = "0.10";
 
@@ -43,7 +41,7 @@ fn main() {
             } else {
                 run_pkg_config().libs
             }
-        }
+        },
     };
 
     let kind = determine_mode(&lib_dirs, libs.as_slice());
@@ -97,7 +95,7 @@ fn determine_mode<T: AsRef<str>>(libdirs: &[PathBuf], libs: &[T]) -> &'static st
     match kind.as_ref().map(|s| &s[..]) {
         Some("0") => return "dylib",
         Some(_) => return "static",
-        None => {}
+        None => {},
     }
 
     let files = libdirs
@@ -122,12 +120,12 @@ fn determine_mode<T: AsRef<str>>(libdirs: &[PathBuf], libs: &[T]) -> &'static st
         (false, true) => return "dylib",
         (false, false) => {
             panic!(
-                "ZBar libdirs at `{:?}` do not contain the required files \
-                 to either statically or dynamically link ZBar",
+                "ZBar libdirs at `{:?}` do not contain the required files to either statically or \
+                 dynamically link ZBar",
                 libdirs
             );
-        }
-        (true, true) => {}
+        },
+        (true, true) => {},
     }
 
     "dylib"

@@ -1,6 +1,5 @@
-use zbar_rust::ZBarImageScanner;
-
 use image::GenericImageView;
+use zbar_rust::ZBarImageScanner;
 
 #[cfg(windows)]
 const INPUT_PATH: &str = r"examples\data\magiclen.org.png";
