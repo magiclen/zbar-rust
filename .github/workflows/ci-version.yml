@@ -16,7 +16,7 @@ jobs:
         os:
           - ubuntu-latest
         toolchain:
-          - 1.61
+          - 1.62
           - stable
           - nightly
         features:
@@ -29,7 +29,7 @@ jobs:
           sudo apt update
           sudo apt install libzbar-dev
           sudo ln -s /usr/lib/x86_64-linux-gnu/libzbar.so /usr/lib
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
