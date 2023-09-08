@@ -16,7 +16,6 @@ jobs:
         os:
           - ubuntu-latest
         toolchain:
-          - 1.62.1
           - stable
           - nightly
         features:
@@ -35,3 +34,27 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
       - run: cargo test --release ${{ matrix.features }}
       - run: cargo doc --release ${{ matrix.features }}
+
+  MSRV:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+        toolchain:
+          - 1.62
+        features:
+          -
+    name: Test ${{ matrix.toolchain }} on ${{ matrix.os }} (${{ matrix.features }})
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install libzbar
+        run: |
+          sudo apt update
+          sudo apt install libzbar-dev
+          sudo ln -s /usr/lib/x86_64-linux-gnu/libzbar.so /usr/lib
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - run: cargo test --release --lib --bins ${{ matrix.features }}
