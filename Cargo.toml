@@ -1,9 +1,9 @@
 [package]
 name = "zbar-rust"
-version = "0.0.22"
+version = "0.0.23"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2021"
-rust-version = "1.62"
+rust-version = "1.63"
 repository = "https://github.com/magiclen/zbar-rust"
 homepage = "https://magiclen.org/zbar-rust"
 keywords = ["zbar", "qrcode", "scanner", "barcode", "scan"]
