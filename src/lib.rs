@@ -32,13 +32,9 @@ for result in results {
 More examples are in the `examples` folder.
 */
 
-#![allow(clippy::enum_clike_unportable_variant)]
-
-#[macro_use]
-extern crate enum_ordinalize;
-
 use std::{ptr, slice};
 
+use enum_ordinalize::Ordinalize;
 use libc::{c_char, c_int, c_uint, c_ulong, c_void};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
