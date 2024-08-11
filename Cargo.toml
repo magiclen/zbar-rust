@@ -3,7 +3,7 @@ name = "zbar-rust"
 version = "0.0.23"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2021"
-rust-version = "1.63"
+rust-version = "1.79"
 repository = "https://github.com/magiclen/zbar-rust"
 homepage = "https://magiclen.org/zbar-rust"
 keywords = ["zbar", "qrcode", "scanner", "barcode", "scan"]
@@ -18,7 +18,7 @@ enum-ordinalize = "4.2"
 
 [dev-dependencies]
 qrcode-generator = "4.1"
-image = "0.24"
+image = "0.25"
 
 [build-dependencies]
 pkg-config = "0.3.14"
