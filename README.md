@@ -56,8 +56,6 @@ for result in results {
 
 ZBar only scans 8-bit grayscale images. Use `ZBarImage::convert` for anything else, and the `zbar_rust::ffi` module for the parts of the C API this crate does not wrap.
 
-More examples are in the `examples` folder.
-
 ## Crates.io
 
 https://crates.io/crates/zbar-rust

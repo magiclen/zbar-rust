@@ -49,8 +49,6 @@ for result in results {
     println!("{}", String::from_utf8(result.data).unwrap())
 }
 ```
-
-More examples are in the `examples` folder.
 */
 
 pub mod ffi;
