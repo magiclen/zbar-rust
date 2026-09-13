@@ -1,9 +1,9 @@
 [package]
 name = "zbar-rust"
-version = "0.0.24"
+version = "0.1.0"
 authors = ["Magic Len <len@magiclen.org>"]
-edition = "2021"
-rust-version = "1.79"
+edition = "2024"
+rust-version = "1.89"
 repository = "https://github.com/magiclen/zbar-rust"
 homepage = "https://magiclen.org/zbar-rust"
 keywords = ["zbar", "qrcode", "scanner", "barcode", "scan"]
@@ -11,14 +11,14 @@ categories = ["external-ffi-bindings", "encoding"]
 description = "High-level and low-level ZBar binding for the Rust language."
 license = "LGPL-2.1"
 include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "build.rs"]
+links = "zbar"
 
 [dependencies]
-libc = "0.2.43"
-enum-ordinalize = "4.2"
+enum-ordinalize = "4.4"
 
 [dev-dependencies]
-qrcode-generator = "4.1"
-image = "0.25"
+qrcode-generator = "6"
+image = "0.25.10"
 
 [build-dependencies]
-pkg-config = "0.3.14"
+pkg-config = "0.3.34"

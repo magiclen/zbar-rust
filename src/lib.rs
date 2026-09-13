@@ -9,20 +9,27 @@ To compile this crate, you need to compile the ZBar library first. You can insta
 * `ZBAR_LIBS`: The library names that you want to link, like `-l`. Use `:` to separate. Typically, it is **iconv:zbar**.
 * `ZBAR_INCLUDE_DIRS`: The directories of header files, like `-i`. Use `:` to separate.
 
+The following environment variables are optional:
+
+* `ZBAR_DIR`: A prefix whose `lib` and `include` subdirectories are used when `ZBAR_LIB_DIRS` or `ZBAR_INCLUDE_DIRS` is not set.
+* `ZBAR_STATIC`: Set it to `0` to force dynamic linking, or to anything else to force static linking. When it is not set, the library files that are actually present decide.
+* `ZBAR_DYLIB_STDCPP`: Set it to anything but `0` to also link `stdc++` dynamically.
+
+When none of `ZBAR_LIB_DIRS`, `ZBAR_INCLUDE_DIRS` and `ZBAR_DIR` is set, `pkg-config` is used to find ZBar.
+
 ## Examples
 
-```rust,ignore
+```no_run
+use image::GenericImageView;
 use zbar_rust::ZBarImageScanner;
 
-use image::GenericImageView;
-
-let img = image::open(INPUT_IMAGE_PATH).unwrap();
+let img = image::open("examples/data/magiclen.org.png").unwrap();
 
 let (width, height) = img.dimensions();
 
 let mut scanner = ZBarImageScanner::new();
 
-let mut results = scanner.scan_y800(img.into_luma8().into_raw(), width, height).unwrap();
+let results = scanner.scan_y800(img.into_luma8().into_raw(), width, height).unwrap();
 
 for result in results {
     println!("{}", String::from_utf8(result.data).unwrap())
@@ -32,421 +39,731 @@ for result in results {
 More examples are in the `examples` folder.
 */
 
-use std::{ptr, slice};
+pub mod ffi;
+
+use core::{
+    ffi::{CStr, c_int, c_ulong},
+    fmt::{self, Display, Formatter},
+    marker::PhantomData,
+    slice,
+};
+use std::{error::Error, ffi::CString};
 
 use enum_ordinalize::Ordinalize;
-use libc::{c_char, c_int, c_uint, c_ulong, c_void};
 
+/// Builds a fourcc format code out of its four characters, the same way the `zbar_fourcc` macro does in C.
+#[inline]
+pub const fn fourcc(code: &[u8; 4]) -> u32 {
+    u32::from_le_bytes(*code)
+}
+
+/// The fourcc code of the 8-bit grayscale format that ZBar calls `Y800`.
+pub const FOURCC_Y800: u32 = fourcc(b"Y800");
+
+/// The fourcc code of the 8-bit grayscale format that ZBar calls `GREY`.
+///
+/// It is the same layout as [`FOURCC_Y800`]. Note the spelling: ZBar does not recognize `GRAY`.
+pub const FOURCC_GREY: u32 = fourcc(b"GREY");
+
+/// Whether a scanned area is a bar or the space between bars.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
-#[repr(isize)]
+#[repr(i32)]
 pub enum ZBarColor {
+    /// A light area.
     ZBarSpace = 0,
+    /// A dark area.
     ZBarBar   = 1,
 }
 
+/// The symbology of a decoded symbol.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
-#[repr(isize)]
+#[repr(i32)]
 pub enum ZBarSymbolType {
+    /// No symbol was decoded.
     ZBarNone       = 0,
+    /// An intermediate status, not a finished symbol.
     ZBarPartial    = 1,
+    /// A GS1 2-digit add-on.
     ZBarEAN2       = 2,
+    /// A GS1 5-digit add-on.
     ZBarEAN5       = 5,
+    /// EAN-8.
     ZBarEAN8       = 8,
+    /// UPC-E.
     ZBarUPCE       = 9,
+    /// ISBN-10, derived from EAN-13.
     ZBarISBN10     = 10,
+    /// UPC-A.
     ZBarUPCA       = 12,
+    /// EAN-13.
     ZBarEAN13      = 13,
+    /// ISBN-13, derived from EAN-13.
     ZBarISBN13     = 14,
+    /// An EAN/UPC composite.
     ZBarComposite  = 15,
+    /// Interleaved 2 of 5.
     ZBarI25        = 25,
+    /// GS1 DataBar, formerly RSS.
     ZBarDataBar    = 34,
+    /// GS1 DataBar Expanded.
     ZBarDataBarExp = 35,
+    /// Codabar.
     ZBarCodeBar    = 38,
+    /// Code 39.
     ZBarCode39     = 39,
+    /// PDF417.
     ZBarPDF417     = 57,
+    /// QR Code.
     ZBarQRCode     = 64,
+    /// SQ Code.
+    ZBarSQCode     = 80,
+    /// Code 93.
     ZBarCode93     = 93,
+    /// Code 128.
     ZBarCode128    = 128,
+    /// The mask of the base symbol type. Deprecated since ZBar 0.11.
     ZBarSymbol     = 0x00FF,
+    /// The 2-digit add-on flag. Deprecated since ZBar 0.11.
     ZBarAddOn2     = 0x0200,
+    /// The 5-digit add-on flag. Deprecated since ZBar 0.11.
     ZBarAddOn5     = 0x0500,
+    /// The mask of the add-on flags. Deprecated since ZBar 0.11.
     ZBarAddOn      = 0x0700,
 }
 
+impl ZBarSymbolType {
+    /// Returns the name ZBar gives this symbology, such as `QR-Code`.
+    #[inline]
+    pub fn name(self) -> &'static str {
+        // The pointer is a string literal inside ZBar, so it lives forever and is always valid ASCII.
+        unsafe { CStr::from_ptr(ffi::zbar_get_symbol_name(self.ordinal())).to_str().unwrap() }
+    }
+}
+
+/// The coarse orientation of a decoded symbol.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
-#[repr(isize)]
+#[repr(i32)]
 pub enum ZBarOrientation {
+    /// The orientation could not be determined.
     ZBarOrientUnknown = -1,
+    /// Upright, read left to right.
     ZBarOrientUp      = 0,
+    /// Sideways, read top to bottom.
     ZBarOrientRight   = 1,
+    /// Upside-down, read right to left.
     ZBarOrientDown    = 2,
+    /// Sideways, read bottom to top.
     ZBarOrientLeft    = 3,
 }
 
+impl ZBarOrientation {
+    /// Returns the name ZBar gives this orientation, such as `UP`.
+    #[inline]
+    pub fn name(self) -> &'static str {
+        unsafe { CStr::from_ptr(ffi::zbar_get_orientation_name(self.ordinal())).to_str().unwrap() }
+    }
+}
+
+/// An error code reported by the ZBar library itself.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
-#[repr(isize)]
-pub enum ZBarError {
+#[repr(i32)]
+pub enum ZBarErrorCode {
+    /// No error.
     ZBarOK,
+    /// Out of memory.
     ZBarErrNoMem,
+    /// An internal library error.
     ZBarErrInternal,
+    /// An unsupported request.
     ZBarErrUnsupported,
+    /// An invalid request.
     ZBarErrInvalid,
+    /// A system error.
     ZBarErrSystem,
+    /// A locking error.
     ZBarErrLocking,
-    ZBarErrBudy,
+    /// All resources are busy.
+    ZBarErrBusy,
+    /// An X11 display error.
     ZBarErrXDisplay,
+    /// An X11 protocol error.
     ZBarErrXProto,
+    /// The output window is closed.
     ZBarErrClosed,
+    /// A Windows system error.
     ZBarErrWinAPI,
+    /// The number of error codes.
     ZBarErrNum,
 }
 
+/// One configuration setting of a scanner.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
-#[repr(isize)]
+#[repr(i32)]
 pub enum ZBarConfig {
-    ZBarCfgEnable    = 0,
-    ZBarCfgAddCheck  = 1,
-    ZBarCfgEmitCheck = 2,
-    ZBarCfgASCII     = 3,
-    ZBarCfgNum       = 4,
-    ZBarCfgMinLen    = 0x20,
-    ZBarCfgMaxLen    = 0x21,
-    ZBarCfgPosition  = 0x80,
-    ZBarCfgXDensity  = 0x100,
-    ZBarCfgYDensity  = 0x101,
+    /// Enables or disables a symbology or feature.
+    ZBarCfgEnable       = 0,
+    /// Enables the check digit where it is optional.
+    ZBarCfgAddCheck     = 1,
+    /// Returns the check digit where it is present.
+    ZBarCfgEmitCheck    = 2,
+    /// Enables the full ASCII character set.
+    ZBarCfgASCII        = 3,
+    /// Keeps binary data as it is instead of converting it to text.
+    ZBarCfgBinary       = 4,
+    /// The number of boolean decoder settings.
+    ZBarCfgNum          = 5,
+    /// The shortest data length that counts as a valid decode.
+    ZBarCfgMinLen       = 0x20,
+    /// The longest data length that counts as a valid decode.
+    ZBarCfgMaxLen       = 0x21,
+    /// How many consistent video frames are required.
+    ZBarCfgUncertainty  = 0x40,
+    /// Lets the scanner collect position data.
+    ZBarCfgPosition     = 0x80,
+    /// Retries with an inverted image when decoding fails.
+    ZBarCfgTestInverted = 0x81,
+    /// The vertical scan density of the image scanner.
+    ZBarCfgXDensity     = 0x100,
+    /// The horizontal scan density of the image scanner.
+    ZBarCfgYDensity     = 0x101,
 }
 
+impl ZBarConfig {
+    /// Returns the name ZBar gives this setting, such as `enable`.
+    #[inline]
+    pub fn name(self) -> &'static str {
+        unsafe { CStr::from_ptr(ffi::zbar_get_config_name(self.ordinal())).to_str().unwrap() }
+    }
+}
+
+/// A decoder modifier that was in effect for a symbol.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
-#[repr(isize)]
+#[repr(i32)]
 pub enum ZBarModifier {
+    /// The symbol carries GS1 data.
     ZBarModGS1,
+    /// The symbol carries AIM data.
     ZBarModAIM,
+    /// The number of modifiers.
     ZBarModNum,
 }
 
+impl ZBarModifier {
+    /// Returns the name ZBar gives this modifier, such as `GS1`.
+    #[inline]
+    pub fn name(self) -> &'static str {
+        unsafe { CStr::from_ptr(ffi::zbar_get_modifier_name(self.ordinal())).to_str().unwrap() }
+    }
+}
+
+/// The kind of a video control.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ordinalize)]
-#[repr(isize)]
+#[repr(i32)]
 pub enum VideoControlType {
+    /// An integer value.
     VideoCntlInteger   = 1,
+    /// A choice out of a menu.
     VideoCntlMenu      = 2,
+    /// A button that triggers an action.
     VideoCntlButton    = 3,
+    /// A 64-bit integer value.
     VideoCntlInteger64 = 4,
+    /// A string value.
     VideoCntlString    = 5,
+    /// A boolean value.
     VideoCntlBoolean   = 6,
 }
 
-// TODO: ----- General Interface START-----
-
-#[link(name = "zbar")]
-extern "C" {
-    pub fn zbar_version(major: *mut c_uint, minor: *mut c_uint, patch: *mut c_uint) -> c_int;
-    pub fn zbar_set_verbosity(verbosity: c_int);
+/// An error returned by the safe API of this crate.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ZBarError {
+    /// The image buffer is too small for the given width and height.
+    InsufficientData {
+        /// How many bytes the image needs.
+        expected: u64,
+        /// How many bytes the buffer holds.
+        actual:   u64,
+    },
+    /// ZBar cannot scan this image format. It only scans [`FOURCC_Y800`] and [`FOURCC_GREY`].
+    UnsupportedImageFormat(u32),
+    /// ZBar reported a symbol type this crate does not know about.
+    UnknownSymbolType(i32),
+    /// ZBar rejected the configuration, because it does not apply to the symbology or is out of range.
+    InvalidConfig,
+    /// ZBar cannot convert the image to the requested format.
+    ImageConversionFailed,
 }
 
-// TODO: ----- General Interface END-----
+impl Display for ZBarError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InsufficientData {
+                expected,
+                actual,
+            } => {
+                write!(f, "the image needs {expected} bytes of data but only {actual} were given")
+            },
+            Self::UnsupportedImageFormat(format) => {
+                let code = format.to_le_bytes();
 
-// TODO: ----- Image Interface START-----
-
-#[link(name = "zbar")]
-extern "C" {
-    pub fn zbar_image_create() -> *mut c_void;
-    pub fn zbar_image_destroy(image: *mut c_void);
-    pub fn zbar_image_ref(image: *mut c_void, refs: c_int);
-    pub fn zbar_image_convert(image: *const c_void, format: c_ulong) -> *mut c_void;
-    pub fn zbar_image_convert_resize(
-        image: *const c_void,
-        format: c_ulong,
-        width: c_uint,
-        height: c_int,
-    ) -> *mut c_void;
-    pub fn zbar_image_get_format(image: *const c_void) -> c_ulong;
-    pub fn zbar_image_get_sequence(image: *const c_void) -> c_uint;
-    pub fn zbar_image_get_width(image: *const c_void) -> c_uint;
-    pub fn zbar_image_get_height(image: *const c_void) -> c_uint;
-    pub fn zbar_image_get_size(image: *const c_void, width: *mut c_uint, height: *mut c_uint);
-    pub fn zbar_image_get_crop(
-        image: *const c_void,
-        x: *mut c_uint,
-        y: *mut c_uint,
-        width: *mut c_uint,
-        height: *mut c_uint,
-    );
-    pub fn zbar_image_get_data(image: *const c_void) -> *const c_void;
-    pub fn zbar_image_get_data_length(image: *const c_void) -> c_ulong;
-    pub fn zbar_image_get_symbols(image: *const c_void) -> *const c_void;
-    pub fn zbar_image_set_symbols(image: *mut c_void, symbols: *const c_void);
-    pub fn zbar_image_first_symbol(image: *const c_void) -> *const c_void;
-    pub fn zbar_image_set_format(image: *mut c_void, format: c_ulong);
-    pub fn zbar_image_set_sequence(image: *mut c_void, sequence_num: c_ulong);
-    pub fn zbar_image_set_size(image: *mut c_void, width: c_ulong, height: c_ulong);
-    pub fn zbar_image_set_crop(
-        image: *mut c_void,
-        x: c_ulong,
-        y: c_ulong,
-        width: c_ulong,
-        height: c_ulong,
-    );
-    pub fn zbar_image_set_data(
-        image: *mut c_void,
-        data: *const c_void,
-        data_byte_length: c_ulong,
-        handler: *mut c_void,
-    );
-    pub fn zbar_image_free_data(image: *mut c_void);
-    pub fn zbar_image_set_userdata(image: *mut c_void, userdata: *const c_void);
-    pub fn zbar_image_get_userdata(image: *const c_void) -> *const c_void;
-    pub fn zbar_image_write(image: *const c_void, filebase: *const c_char) -> c_uint;
-    pub fn zbar_image_read(filename: *mut c_char) -> *const c_void;
+                write!(
+                    f,
+                    "ZBar cannot scan images in the {} format",
+                    String::from_utf8_lossy(&code)
+                )
+            },
+            Self::UnknownSymbolType(symbol_type) => {
+                write!(f, "ZBar reported the unknown symbol type {symbol_type}")
+            },
+            Self::InvalidConfig => f.write_str("ZBar rejected the configuration"),
+            Self::ImageConversionFailed => {
+                f.write_str("ZBar cannot convert the image to the requested format")
+            },
+        }
+    }
 }
 
-pub struct ZBarImage {
-    image: *mut c_void,
+impl Error for ZBarError {}
+
+/// Returns the version of the ZBar library as `(major, minor, patch)`.
+#[inline]
+pub fn version() -> (u32, u32, u32) {
+    let mut major = 0;
+    let mut minor = 0;
+    let mut patch = 0;
+
+    unsafe {
+        ffi::zbar_version(&mut major, &mut minor, &mut patch);
+    }
+
+    (major, minor, patch)
 }
 
-fn zbar_image_free_data_do_nothing(_image: *mut c_void) {}
+/// Sets how much diagnostic output ZBar writes to stderr. 0 turns it off.
+#[inline]
+pub fn set_verbosity(verbosity: i32) {
+    unsafe {
+        ffi::zbar_set_verbosity(verbosity);
+    }
+}
 
-impl ZBarImage {
-    pub fn new() -> ZBarImage {
-        let image = unsafe { zbar_image_create() };
+/// Raises the verbosity level of ZBar by one.
+#[inline]
+pub fn increase_verbosity() {
+    unsafe {
+        ffi::zbar_increase_verbosity();
+    }
+}
+
+/// ZBar calls this when it releases the sample data of an image. The data is borrowed from Rust, so nothing must be freed here.
+unsafe extern "C" fn keep_borrowed_data(_image: *mut ffi::zbar_image_t) {}
+
+/// An image that ZBar can scan or convert.
+///
+/// The lifetime is that of the sample data the image borrows, so the buffer cannot be dropped while the image still points at it.
+pub struct ZBarImage<'a> {
+    image: *mut ffi::zbar_image_t,
+    data:  PhantomData<&'a [u8]>,
+}
+
+// A `ZBarImage` owns its handle, and ZBar keeps no global mutable state for images.
+unsafe impl Send for ZBarImage<'_> {}
+
+impl<'a> ZBarImage<'a> {
+    /// Creates an image in the `Y800` format, which is 8-bit grayscale, one byte per pixel.
+    ///
+    /// It fails when `data` holds fewer than `width * height` bytes.
+    #[inline]
+    pub fn new_y800(data: &'a [u8], width: u32, height: u32) -> Result<Self, ZBarError> {
+        Self::new_grayscale(data, width, height, FOURCC_Y800)
+    }
+
+    /// Creates an image in the `GREY` format, which has the same layout as `Y800`.
+    ///
+    /// It fails when `data` holds fewer than `width * height` bytes.
+    ///
+    /// Prefer the `Y800` format: ZBar decodes both, but its SQ Code decoder writes `Unexpected image format` to stderr for `GREY`.
+    #[inline]
+    pub fn new_grey(data: &'a [u8], width: u32, height: u32) -> Result<Self, ZBarError> {
+        Self::new_grayscale(data, width, height, FOURCC_GREY)
+    }
+
+    fn new_grayscale(
+        data: &'a [u8],
+        width: u32,
+        height: u32,
+        format: u32,
+    ) -> Result<Self, ZBarError> {
+        let expected = u64::from(width) * u64::from(height);
+        let actual = data.len() as u64;
+
+        if actual < expected {
+            return Err(ZBarError::InsufficientData {
+                expected,
+                actual,
+            });
+        }
+
+        // SAFETY: the buffer is at least `width * height` bytes, which is all ZBar reads for these formats.
+        Ok(unsafe { Self::new_with_format(data, width, height, format) })
+    }
+
+    /// Creates an image in any format ZBar understands.
+    ///
+    /// # Safety
+    ///
+    /// `data` must be large enough to hold a `width` by `height` image in `format`. ZBar reads the buffer from its size and format alone and never looks at the length that was given to it, so a buffer that is too small is read out of bounds.
+    ///
+    /// Prefer [`ZBarImage::new_y800`] or [`ZBarImage::new_grey`], which check the length for you.
+    pub unsafe fn new_with_format(data: &'a [u8], width: u32, height: u32, format: u32) -> Self {
+        let image = unsafe { ffi::zbar_image_create() };
+
+        assert!(!image.is_null(), "ZBar cannot allocate an image");
+
+        unsafe {
+            ffi::zbar_image_set_format(image, c_ulong::from(format));
+            ffi::zbar_image_set_size(image, width, height);
+            ffi::zbar_image_set_data(
+                image,
+                data.as_ptr().cast(),
+                data.len() as c_ulong,
+                Some(keep_borrowed_data),
+            );
+        }
 
         ZBarImage {
             image,
+            data: PhantomData,
         }
     }
 
-    pub fn set_format(&mut self, format: u32) {
+    /// Returns the width of the image in pixels.
+    #[inline]
+    pub fn width(&self) -> u32 {
+        unsafe { ffi::zbar_image_get_width(self.image) }
+    }
+
+    /// Returns the height of the image in pixels.
+    #[inline]
+    pub fn height(&self) -> u32 {
+        unsafe { ffi::zbar_image_get_height(self.image) }
+    }
+
+    /// Returns the fourcc format code of the image.
+    #[inline]
+    pub fn format(&self) -> u32 {
+        unsafe { ffi::zbar_image_get_format(self.image) as u32 }
+    }
+
+    /// Returns the sample data of the image.
+    #[inline]
+    pub fn data(&self) -> &[u8] {
         unsafe {
-            zbar_image_set_format(self.image, c_ulong::from(format));
-        }
-    }
+            let data = ffi::zbar_image_get_data(self.image);
 
-    pub fn set_size(&mut self, width: u32, height: u32) {
-        unsafe {
-            zbar_image_set_size(self.image, c_ulong::from(width), c_ulong::from(height));
-        }
-    }
-
-    pub fn set_ref(&mut self, r: isize) {
-        unsafe {
-            zbar_image_ref(self.image, r as c_int);
-        }
-    }
-
-    pub fn destroy(&mut self) {
-        if !self.image.is_null() {
-            unsafe {
-                zbar_image_destroy(self.image);
-                self.image = ptr::null_mut();
+            if data.is_null() {
+                &[]
+            } else {
+                slice::from_raw_parts(
+                    data.cast::<u8>(),
+                    ffi::zbar_image_get_data_length(self.image) as usize,
+                )
             }
         }
     }
-}
 
-impl Default for ZBarImage {
+    /// Returns the crop rectangle as `(x, y, width, height)`.
     #[inline]
-    fn default() -> Self {
-        ZBarImage::new()
+    pub fn crop(&self) -> (u32, u32, u32, u32) {
+        let mut x = 0;
+        let mut y = 0;
+        let mut width = 0;
+        let mut height = 0;
+
+        unsafe {
+            ffi::zbar_image_get_crop(self.image, &mut x, &mut y, &mut width, &mut height);
+        }
+
+        (x, y, width, height)
+    }
+
+    /// Restricts scanning to a rectangle of the image. ZBar clamps the rectangle to the image.
+    #[inline]
+    pub fn set_crop(&mut self, x: u32, y: u32, width: u32, height: u32) {
+        unsafe {
+            ffi::zbar_image_set_crop(self.image, x, y, width, height);
+        }
+    }
+
+    /// Converts the image to another format.
+    ///
+    /// The result may share the sample data of this image, so it borrows for the same lifetime.
+    #[inline]
+    pub fn convert(&self, format: u32) -> Result<ZBarImage<'a>, ZBarError> {
+        let image = unsafe { ffi::zbar_image_convert(self.image, c_ulong::from(format)) };
+
+        Self::from_converted(image)
+    }
+
+    /// Converts the image to another format and size in one step.
+    ///
+    /// The result may share the sample data of this image, so it borrows for the same lifetime.
+    #[inline]
+    pub fn convert_resize(
+        &self,
+        format: u32,
+        width: u32,
+        height: u32,
+    ) -> Result<ZBarImage<'a>, ZBarError> {
+        let image = unsafe {
+            ffi::zbar_image_convert_resize(self.image, c_ulong::from(format), width, height)
+        };
+
+        Self::from_converted(image)
+    }
+
+    #[inline]
+    fn from_converted(image: *mut ffi::zbar_image_t) -> Result<ZBarImage<'a>, ZBarError> {
+        if image.is_null() {
+            Err(ZBarError::ImageConversionFailed)
+        } else {
+            Ok(ZBarImage {
+                image,
+                data: PhantomData,
+            })
+        }
     }
 }
 
-impl Drop for ZBarImage {
+impl Drop for ZBarImage<'_> {
+    #[inline]
     fn drop(&mut self) {
-        self.destroy();
+        unsafe {
+            ffi::zbar_image_destroy(self.image);
+        }
     }
 }
 
-// TODO: ----- Image Interface END-----
-
-// TODO: ----- Symbol Interface START-----
-
-#[link(name = "zbar")]
-extern "C" {
-    pub fn zbar_symbol_ref(symbol: *const c_void, refs: c_int);
-    pub fn zbar_symbol_get_type(symbol: *const c_void) -> c_int;
-    pub fn zbar_symbol_get_configs(symbol: *const c_void) -> c_uint;
-    pub fn zbar_symbol_get_modifiers(symbol: *const c_void) -> c_uint;
-    pub fn zbar_symbol_get_data(symbol: *const c_void) -> *mut c_char;
-    pub fn zbar_symbol_get_data_length(symbol: *const c_void) -> c_uint;
-    pub fn zbar_symbol_get_quality(symbol: *const c_void) -> c_int;
-    pub fn zbar_symbol_get_count(symbol: *const c_void) -> c_int;
-    pub fn zbar_symbol_get_loc_size(symbol: *const c_void) -> c_uint;
-    pub fn zbar_symbol_get_loc_x(symbol: *const c_void, index: c_uint) -> c_int;
-    pub fn zbar_symbol_get_loc_y(symbol: *const c_void, index: c_uint) -> c_int;
-    pub fn zbar_symbol_get_orientation(symbol: *const c_void) -> c_int;
-    pub fn zbar_symbol_next(symbol: *const c_void) -> *const c_void;
-    pub fn zbar_symbol_get_components(symbol: *const c_void) -> *const c_void;
-    pub fn zbar_symbol_first_component(symbol: *const c_void) -> *const c_void;
-    pub fn zbar_symbol_xml(
-        symbol: *const c_void,
-        buffer: *mut *mut c_char,
-        buflen: *mut c_uint,
-    ) -> *mut c_char;
-}
-
-// TODO: ----- Symbol Interface END-----
-
-// TODO: ----- Image Scanner Interface START-----
-
-#[link(name = "zbar")]
-extern "C" {
-    pub fn zbar_image_scanner_create() -> *mut c_void;
-    pub fn zbar_image_scanner_destroy(scanner: *mut c_void);
-    pub fn zbar_image_scanner_set_data_handler(
-        scanner: *mut c_void,
-        handler: *const c_void,
-        userdata: *const c_void,
-    );
-    pub fn zbar_image_scanner_set_config(
-        scanner: *mut c_void,
-        symbology: c_int,
-        config: c_int,
-        value: c_int,
-    ) -> c_int;
-    pub fn zbar_image_scanner_parse_config(
-        scanner: *mut c_void,
-        config_string: *const c_char,
-    ) -> c_int;
-    pub fn zbar_image_scanner_enable_cache(scanner: *mut c_void, enable: c_int);
-    pub fn zbar_image_scanner_recycle_image(scanner: *mut c_void, image: *mut c_void);
-    pub fn zbar_image_scanner_get_results(scanner: *const c_void) -> *const c_void;
-    pub fn zbar_scan_image(scanner: *mut c_void, image: *mut c_void) -> c_int;
-}
-
-#[derive(Debug)]
+/// One symbol that a scanner decoded out of an image.
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct ZBarImageScanResult {
+    /// The symbology of the symbol.
     pub symbol_type: ZBarSymbolType,
+    /// The decoded data, which may contain any byte including NUL.
     pub data:        Vec<u8>,
+    /// The corners of the symbol, in image coordinates.
     pub points:      Vec<(i32, i32)>,
+    /// A relative quality metric. Larger values mean a more confident decode.
+    pub quality:     i32,
+    /// The coarse orientation of the symbol.
+    pub orientation: ZBarOrientation,
 }
 
+/// A scanner that reads symbols out of images.
 pub struct ZBarImageScanner {
-    scanner: *mut c_void,
+    scanner: *mut ffi::zbar_image_scanner_t,
 }
+
+// A `ZBarImageScanner` owns its handle, and ZBar keeps no global mutable state for scanners.
+unsafe impl Send for ZBarImageScanner {}
 
 impl ZBarImageScanner {
+    /// Creates a scanner with the default configuration.
+    ///
+    /// # Panics
+    ///
+    /// Panics when ZBar cannot allocate the scanner.
+    #[inline]
     pub fn new() -> ZBarImageScanner {
-        let scanner = unsafe { zbar_image_scanner_create() };
+        let scanner = unsafe { ffi::zbar_image_scanner_create() };
+
+        assert!(!scanner.is_null(), "ZBar cannot allocate an image scanner");
 
         ZBarImageScanner {
             scanner,
         }
     }
 
+    /// Sets one configuration value for a symbology, or for every symbology when `symbology` is [`ZBarSymbolType::ZBarNone`].
+    #[inline]
     pub fn set_config(
         &mut self,
         symbology: ZBarSymbolType,
         config: ZBarConfig,
-        value: isize,
-    ) -> Result<(), &'static str> {
+        value: i32,
+    ) -> Result<(), ZBarError> {
         let result = unsafe {
-            zbar_image_scanner_set_config(
+            ffi::zbar_image_scanner_set_config(
                 self.scanner,
-                symbology.ordinal() as c_int,
-                config.ordinal() as c_int,
-                value as c_int,
+                symbology.ordinal(),
+                config.ordinal(),
+                value,
             )
         };
-        if result == 0 {
-            Ok(())
-        } else {
-            Err("unsuccessfully")
-        }
+
+        if result == 0 { Ok(()) } else { Err(ZBarError::InvalidConfig) }
     }
 
-    pub fn destroy(mut self) {
+    /// Reads back one configuration value.
+    #[inline]
+    pub fn get_config(
+        &mut self,
+        symbology: ZBarSymbolType,
+        config: ZBarConfig,
+    ) -> Result<i32, ZBarError> {
+        let mut value = 0;
+
+        let result = unsafe {
+            ffi::zbar_image_scanner_get_config(
+                self.scanner,
+                symbology.ordinal(),
+                config.ordinal(),
+                &mut value,
+            )
+        };
+
+        if result == 0 { Ok(value) } else { Err(ZBarError::InvalidConfig) }
+    }
+
+    /// Applies a configuration string of the form `[symbology.]config[=value]`, such as `qrcode.enable=1`.
+    pub fn parse_config(&mut self, config_string: &str) -> Result<(), ZBarError> {
+        let config_string = CString::new(config_string).map_err(|_| ZBarError::InvalidConfig)?;
+
+        let mut symbology = 0;
+        let mut config = 0;
+        let mut value = 0;
+
+        // This mirrors the `zbar_image_scanner_parse_config` inline function in `zbar.h`, which is not an exported symbol.
+        let result = unsafe {
+            ffi::zbar_parse_config(config_string.as_ptr(), &mut symbology, &mut config, &mut value)
+        };
+
+        if result != 0 {
+            return Err(ZBarError::InvalidConfig);
+        }
+
+        let result =
+            unsafe { ffi::zbar_image_scanner_set_config(self.scanner, symbology, config, value) };
+
+        if result == 0 { Ok(()) } else { Err(ZBarError::InvalidConfig) }
+    }
+
+    /// Turns the inter-image result cache on or off, and clears it either way.
+    ///
+    /// The cache filters duplicate results out of consecutive images, which is what you want when scanning video frames.
+    #[inline]
+    pub fn enable_cache(&mut self, enable: bool) {
         unsafe {
-            zbar_image_scanner_destroy(self.scanner);
-            self.scanner = ptr::null_mut();
+            ffi::zbar_image_scanner_enable_cache(self.scanner, c_int::from(enable));
         }
     }
 
+    /// Scans an 8-bit grayscale image in the `Y800` format, one byte per pixel.
+    ///
+    /// It fails when `data` holds fewer than `width * height` bytes.
+    #[inline]
     pub fn scan_y800<D: AsRef<[u8]>>(
         &mut self,
         data: D,
         width: u32,
         height: u32,
-    ) -> Result<Vec<ZBarImageScanResult>, &'static str> {
-        //        let format: u32 = unsafe { transmute([b'Y', b'8', b'0', b'0']) };
-        self.scan(data, width, height, 808_466_521)
+    ) -> Result<Vec<ZBarImageScanResult>, ZBarError> {
+        let mut image = ZBarImage::new_y800(data.as_ref(), width, height)?;
+
+        self.scan_image(&mut image)
     }
 
-    pub fn scan_gray<D: AsRef<[u8]>>(
+    /// Scans an 8-bit grayscale image in the `GREY` format, which has the same layout as `Y800`.
+    ///
+    /// It fails when `data` holds fewer than `width * height` bytes.
+    ///
+    /// Prefer the `Y800` format: ZBar decodes both, but its SQ Code decoder writes `Unexpected image format` to stderr for `GREY`.
+    #[inline]
+    pub fn scan_grey<D: AsRef<[u8]>>(
         &mut self,
         data: D,
         width: u32,
         height: u32,
-    ) -> Result<Vec<ZBarImageScanResult>, &'static str> {
-        //        let format: u32 = unsafe { transmute([b'G', b'R', b'A', b'Y']) };
-        self.scan(data, width, height, 1_497_453_127)
+    ) -> Result<Vec<ZBarImageScanResult>, ZBarError> {
+        let mut image = ZBarImage::new_grey(data.as_ref(), width, height)?;
+
+        self.scan_image(&mut image)
     }
 
-    pub fn scan<D: AsRef<[u8]>>(
+    /// Scans an image that is already in the `Y800` or `GREY` format.
+    ///
+    /// Use [`ZBarImage::convert`] first for anything else, because ZBar only scans those two formats.
+    pub fn scan_image(
         &mut self,
-        data: D,
-        width: u32,
-        height: u32,
-        format: u32,
-    ) -> Result<Vec<ZBarImageScanResult>, &'static str> {
-        let data = data.as_ref();
-
-        let mut image = ZBarImage::new();
-
-        image.set_size(width, height);
-        image.set_format(format);
-
-        unsafe {
-            zbar_image_set_data(
-                image.image,
-                data.as_ptr() as *const c_void,
-                data.len() as c_ulong,
-                zbar_image_free_data_do_nothing as *mut c_void, /* `data` is borrowed - do not attempt to free it */
-            );
-        }
-
-        let n = unsafe { zbar_scan_image(self.scanner, image.image) };
+        image: &mut ZBarImage<'_>,
+    ) -> Result<Vec<ZBarImageScanResult>, ZBarError> {
+        let n = unsafe { ffi::zbar_scan_image(self.scanner, image.image) };
 
         if n < 0 {
-            return Err("incorrect image");
+            return Err(ZBarError::UnsupportedImageFormat(image.format()));
         }
 
-        let mut result_array = Vec::with_capacity(n as usize);
+        let symbols = unsafe { ffi::zbar_image_get_symbols(image.image) };
 
-        let mut symbol = unsafe { zbar_image_first_symbol(image.image) };
+        let mut results = if symbols.is_null() {
+            Vec::new()
+        } else {
+            let size = unsafe { ffi::zbar_symbol_set_get_size(symbols) };
+
+            Vec::with_capacity(size.max(0) as usize)
+        };
+
+        let mut symbol = unsafe { ffi::zbar_image_first_symbol(image.image) };
 
         while !symbol.is_null() {
-            let symbol_type = unsafe { zbar_symbol_get_type(symbol) };
-            let symbol_type = unsafe { ZBarSymbolType::from_ordinal_unsafe(symbol_type as isize) };
+            let raw_symbol_type = unsafe { ffi::zbar_symbol_get_type(symbol) };
+            let symbol_type = ZBarSymbolType::from_ordinal(raw_symbol_type)
+                .ok_or(ZBarError::UnknownSymbolType(raw_symbol_type))?;
 
             let data = unsafe {
-                let data = zbar_symbol_get_data(symbol);
-                let data_length = zbar_symbol_get_data_length(symbol) as usize;
-                slice::from_raw_parts(data as *mut u8, data_length).to_vec()
+                let data = ffi::zbar_symbol_get_data(symbol);
+
+                if data.is_null() {
+                    Vec::new()
+                } else {
+                    let data_length = ffi::zbar_symbol_get_data_length(symbol) as usize;
+
+                    slice::from_raw_parts(data.cast::<u8>(), data_length).to_vec()
+                }
             };
 
             // extract bounding box
-            let loc_size = unsafe { zbar_symbol_get_loc_size(symbol) };
+            let loc_size = unsafe { ffi::zbar_symbol_get_loc_size(symbol) };
 
             let mut points = Vec::with_capacity(loc_size as usize);
 
             for i in 0..loc_size {
-                let x = unsafe { zbar_symbol_get_loc_x(symbol, i) };
-                let y = unsafe { zbar_symbol_get_loc_y(symbol, i) };
+                let x = unsafe { ffi::zbar_symbol_get_loc_x(symbol, i) };
+                let y = unsafe { ffi::zbar_symbol_get_loc_y(symbol, i) };
 
                 points.push((x, y));
             }
 
-            let result = ZBarImageScanResult {
+            let quality = unsafe { ffi::zbar_symbol_get_quality(symbol) };
+
+            let orientation = unsafe { ffi::zbar_symbol_get_orientation(symbol) };
+            let orientation = ZBarOrientation::from_ordinal(orientation)
+                .unwrap_or(ZBarOrientation::ZBarOrientUnknown);
+
+            results.push(ZBarImageScanResult {
                 symbol_type,
                 data,
                 points,
-            };
+                quality,
+                orientation,
+            });
 
-            result_array.push(result);
-
-            symbol = unsafe { zbar_symbol_next(symbol) };
+            symbol = unsafe { ffi::zbar_symbol_next(symbol) };
         }
 
-        Ok(result_array)
+        Ok(results)
     }
 }
 
@@ -458,12 +775,10 @@ impl Default for ZBarImageScanner {
 }
 
 impl Drop for ZBarImageScanner {
+    #[inline]
     fn drop(&mut self) {
-        if !self.scanner.is_null() {
-            unsafe {
-                zbar_image_scanner_destroy(self.scanner);
-            }
+        unsafe {
+            ffi::zbar_image_scanner_destroy(self.scanner);
         }
     }
 }
-// TODO: ----- Image Scanner Interface END-----
