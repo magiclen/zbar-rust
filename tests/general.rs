@@ -7,12 +7,12 @@ fn version() {
 
     assert_eq!(0, result);
 
-    assert!(major == 0 && minor >= 10);
+    assert!((0, 22) <= (major, minor));
 }
 
 #[test]
 fn version_wrapper() {
     let (major, minor, _patch) = zbar_rust::version();
 
-    assert!(major == 0 && minor >= 10);
+    assert!((0, 22) <= (major, minor));
 }

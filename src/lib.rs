@@ -3,19 +3,33 @@ High-level and low-level ZBar binding for the Rust language.
 
 ## Compilation
 
-To compile this crate, you need to compile the ZBar library first. You can install ZBar in your operating system, or in somewhere in your file system. As for the latter, you need to set the following environment variables to link the ZBar library:
+To compile this crate, you need ZBar 0.22 or later.
+`pkg-config` can find ZBar and its link dependencies.
 
-* `ZBAR_LIB_DIRS`: The directories of library files, like `-L`. Use `:` to separate.
-* `ZBAR_LIBS`: The library names that you want to link, like `-l`. Use `:` to separate. Typically, it is **iconv:zbar**.
-* `ZBAR_INCLUDE_DIRS`: The directories of header files, like `-i`. Use `:` to separate.
+To use a custom installation, set `ZBAR_DIR` to its prefix, or set both `ZBAR_LIB_DIRS` and `ZBAR_INCLUDE_DIRS`:
+
+* `ZBAR_LIB_DIRS`: The directories of library files, like `-L`.
+  Separate paths with `;` on a Windows build host or `:` on other build hosts.
+* `ZBAR_INCLUDE_DIRS`: The directories of header files, like `-I`.
+  Use the same path separator as `ZBAR_LIB_DIRS`.
+* `ZBAR_DIR`: A prefix whose `lib` and `include` subdirectories are used when `ZBAR_LIB_DIRS` or `ZBAR_INCLUDE_DIRS` is not set.
+* `ZBAR_LIBS`: The library names to link, separated by `:` on every platform.
+  Setting this variable replaces the library list from `pkg-config`.
+
+When library directories are set manually, the default library name is `zbar`.
+Set `ZBAR_LIBS` to include any required dependencies, such as `zbar:iconv` for a build that uses a separate iconv library.
+When both library and header directories are provided, `pkg-config` is not needed; you must ensure that the installed ZBar is version 0.22 or later.
+Missing directories are found with `pkg-config`, and an include-only override keeps automatic library discovery.
 
 The following environment variables are optional:
 
-* `ZBAR_DIR`: A prefix whose `lib` and `include` subdirectories are used when `ZBAR_LIB_DIRS` or `ZBAR_INCLUDE_DIRS` is not set.
-* `ZBAR_STATIC`: Set it to `0` to force dynamic linking, or to anything else to force static linking. When it is not set, the library files that are actually present decide.
+* `ZBAR_STATIC`: Set it to `0` to select dynamic linking, or to anything else to select static linking.
+  When it is not set, dynamic linking is preferred when both kinds are available.
+  Automatic discovery queries the private dependencies again if only a static ZBar library is available; dependencies may use dynamic linking when needed.
 * `ZBAR_DYLIB_STDCPP`: Set it to anything but `0` to also link `stdc++` dynamically.
 
-When none of `ZBAR_LIB_DIRS`, `ZBAR_INCLUDE_DIRS` and `ZBAR_DIR` is set, `pkg-config` is used to find ZBar.
+Automatic library discovery preserves the frameworks, library files and linker arguments reported by `pkg-config`.
+With manual linking, `ZBAR_LIBS` must contain the complete library list.
 
 ## Examples
 
@@ -229,7 +243,7 @@ pub enum ZBarConfig {
 }
 
 impl ZBarConfig {
-    /// Returns the name ZBar gives this setting, such as `enable`.
+    /// Returns the name ZBar gives this setting, such as `ENABLE`.
     #[inline]
     pub fn name(self) -> &'static str {
         unsafe { CStr::from_ptr(ffi::zbar_get_config_name(self.ordinal())).to_str().unwrap() }
@@ -341,16 +355,25 @@ pub fn version() -> (u32, u32, u32) {
 }
 
 /// Sets how much diagnostic output ZBar writes to stderr. 0 turns it off.
+///
+/// # Safety
+///
+/// No other thread may call ZBar functions while this function runs, because ZBar reads and writes its global verbosity level without a lock.
 #[inline]
-pub fn set_verbosity(verbosity: i32) {
+pub unsafe fn set_verbosity(verbosity: i32) {
     unsafe {
         ffi::zbar_set_verbosity(verbosity);
     }
 }
 
-/// Raises the verbosity level of ZBar by one.
+/// Raises the verbosity level of ZBar.
+///
+/// # Safety
+///
+/// No other thread may call ZBar functions while this function runs, because ZBar reads and writes its global verbosity level without a lock.
+/// The current level must be nonnegative, and doubling it must fit in `i32`.
 #[inline]
-pub fn increase_verbosity() {
+pub unsafe fn increase_verbosity() {
     unsafe {
         ffi::zbar_increase_verbosity();
     }
@@ -358,6 +381,16 @@ pub fn increase_verbosity() {
 
 /// ZBar calls this when it releases the sample data of an image. The data is borrowed from Rust, so nothing must be freed here.
 unsafe extern "C" fn keep_borrowed_data(_image: *mut ffi::zbar_image_t) {}
+
+// The buffer was passed to ZBar with `Box::into_raw`, and its length fits in `c_ulong`.
+unsafe extern "C" fn free_owned_data(image: *mut ffi::zbar_image_t) {
+    unsafe {
+        let data = ffi::zbar_image_get_data(image).cast_mut().cast::<u8>();
+        let len = ffi::zbar_image_get_data_length(image) as usize;
+
+        drop(Box::from_raw(core::ptr::slice_from_raw_parts_mut(data, len)));
+    }
+}
 
 /// An image that ZBar can scan or convert.
 ///
@@ -488,9 +521,17 @@ impl<'a> ZBarImage<'a> {
         (x, y, width, height)
     }
 
-    /// Restricts scanning to a rectangle of the image. ZBar clamps the rectangle to the image.
+    /// Restricts scanning to a rectangle of the image.
+    /// The rectangle is clamped to the image.
     #[inline]
     pub fn set_crop(&mut self, x: u32, y: u32, width: u32, height: u32) {
+        let image_width = self.width();
+        let image_height = self.height();
+        let x = x.min(image_width);
+        let y = y.min(image_height);
+        let width = width.min(image_width - x);
+        let height = height.min(image_height - y);
+
         unsafe {
             ffi::zbar_image_set_crop(self.image, x, y, width, height);
         }
@@ -506,7 +547,12 @@ impl<'a> ZBarImage<'a> {
         Self::from_converted(image)
     }
 
-    /// Converts the image to another format and size in one step.
+    /// Converts the image to another format and crops or pads it to the requested size.
+    ///
+    /// Extra rows and columns are dropped from the bottom and right, or filled by repeating the last row and column.
+    /// The image is not scaled.
+    ///
+    /// A nonempty grayscale image cannot be made from an empty source image.
     ///
     /// The result may share the sample data of this image, so it borrows for the same lifetime.
     #[inline]
@@ -516,11 +562,80 @@ impl<'a> ZBarImage<'a> {
         width: u32,
         height: u32,
     ) -> Result<ZBarImage<'a>, ZBarError> {
+        if matches!(self.format(), FOURCC_Y800 | FOURCC_GREY)
+            && matches!(format, FOURCC_Y800 | FOURCC_GREY)
+            && (width != self.width() || height != self.height())
+        {
+            // ZBar 0.23.93 writes through a null pointer when resizing between grayscale formats.
+            return self.resize_grayscale(format, width, height);
+        }
+
         let image = unsafe {
             ffi::zbar_image_convert_resize(self.image, c_ulong::from(format), width, height)
         };
 
         Self::from_converted(image)
+    }
+
+    fn resize_grayscale(
+        &self,
+        format: u32,
+        width: u32,
+        height: u32,
+    ) -> Result<ZBarImage<'a>, ZBarError> {
+        let len = (width as usize)
+            .checked_mul(height as usize)
+            .filter(|&len| len <= c_ulong::MAX as usize)
+            .ok_or(ZBarError::ImageConversionFailed)?;
+        let source_width = self.width() as usize;
+        let source_height = self.height() as usize;
+
+        if len != 0 && (source_width == 0 || source_height == 0) {
+            return Err(ZBarError::ImageConversionFailed);
+        }
+
+        let mut data = Vec::new();
+        data.try_reserve_exact(len).map_err(|_| ZBarError::ImageConversionFailed)?;
+
+        if len != 0 {
+            let width = width as usize;
+            let copy_width = width.min(source_width);
+            let copy_height = (height as usize).min(source_height);
+
+            for row in self.data().chunks_exact(source_width).take(copy_height) {
+                data.extend_from_slice(&row[..copy_width]);
+                data.resize(data.len() + width - copy_width, row[copy_width - 1]);
+            }
+
+            let last_row = data.len() - width..data.len();
+
+            while data.len() < len {
+                data.extend_from_within(last_row.clone());
+            }
+        }
+
+        let image = unsafe { ffi::zbar_image_create() };
+
+        if image.is_null() {
+            return Err(ZBarError::ImageConversionFailed);
+        }
+
+        let data = Box::into_raw(data.into_boxed_slice()).cast::<u8>();
+
+        unsafe {
+            ffi::zbar_image_set_format(image, c_ulong::from(format));
+            ffi::zbar_image_set_size(image, width, height);
+            ffi::zbar_image_set_data(image, data.cast(), len as c_ulong, Some(free_owned_data));
+        }
+
+        let mut image = ZBarImage {
+            image,
+            data: PhantomData,
+        };
+        let (x, y, width, height) = self.crop();
+        image.set_crop(x, y, width, height);
+
+        Ok(image)
     }
 
     #[inline]
@@ -594,6 +709,16 @@ impl ZBarImageScanner {
         config: ZBarConfig,
         value: i32,
     ) -> Result<(), ZBarError> {
+        if matches!(
+            symbology,
+            ZBarSymbolType::ZBarSymbol
+                | ZBarSymbolType::ZBarAddOn2
+                | ZBarSymbolType::ZBarAddOn5
+                | ZBarSymbolType::ZBarAddOn
+        ) {
+            return Err(ZBarError::InvalidConfig);
+        }
+
         let result = unsafe {
             ffi::zbar_image_scanner_set_config(
                 self.scanner,

@@ -17,8 +17,8 @@ links = "zbar"
 enum-ordinalize = "4.4"
 
 [dev-dependencies]
-qrcode-generator = "6"
-image = "0.25.10"
+qrcode-generator = { version = "6", default-features = false, features = ["qr"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 [build-dependencies]
 pkg-config = "0.3.34"

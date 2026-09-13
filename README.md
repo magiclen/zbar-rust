@@ -7,19 +7,33 @@ High-level and low-level ZBar binding for the Rust language.
 
 ## Compilation
 
-To compile this crate, you need to compile the ZBar library first. You can install ZBar in your operating system, or in somewhere in your file system. As for the latter, you need to set the following environment variables to link the ZBar library:
+To compile this crate, you need ZBar 0.22 or later.
+`pkg-config` can find ZBar and its link dependencies.
 
-* `ZBAR_LIB_DIRS`: The directories of library files, like `-L`. Use `:` to separate.
-* `ZBAR_LIBS`: The library names that you want to link, like `-l`. Use `:` to separate. Typically, it is **iconv:zbar**.
-* `ZBAR_INCLUDE_DIRS`: The directories of header files, like `-i`. Use `:` to separate.
+To use a custom installation, set `ZBAR_DIR` to its prefix, or set both `ZBAR_LIB_DIRS` and `ZBAR_INCLUDE_DIRS`:
+
+* `ZBAR_LIB_DIRS`: The directories of library files, like `-L`.
+  Separate paths with `;` on a Windows build host or `:` on other build hosts.
+* `ZBAR_INCLUDE_DIRS`: The directories of header files, like `-I`.
+  Use the same path separator as `ZBAR_LIB_DIRS`.
+* `ZBAR_DIR`: A prefix whose `lib` and `include` subdirectories are used when `ZBAR_LIB_DIRS` or `ZBAR_INCLUDE_DIRS` is not set.
+* `ZBAR_LIBS`: The library names to link, separated by `:` on every platform.
+  Setting this variable replaces the library list from `pkg-config`.
+
+When library directories are set manually, the default library name is `zbar`.
+Set `ZBAR_LIBS` to include any required dependencies, such as `zbar:iconv` for a build that uses a separate iconv library.
+When both library and header directories are provided, `pkg-config` is not needed; you must ensure that the installed ZBar is version 0.22 or later.
+Missing directories are found with `pkg-config`, and an include-only override keeps automatic library discovery.
 
 The following environment variables are optional:
 
-* `ZBAR_DIR`: A prefix whose `lib` and `include` subdirectories are used when `ZBAR_LIB_DIRS` or `ZBAR_INCLUDE_DIRS` is not set.
-* `ZBAR_STATIC`: Set it to `0` to force dynamic linking, or to anything else to force static linking. When it is not set, the library files that are actually present decide.
+* `ZBAR_STATIC`: Set it to `0` to select dynamic linking, or to anything else to select static linking.
+  When it is not set, dynamic linking is preferred when both kinds are available.
+  Automatic discovery queries the private dependencies again if only a static ZBar library is available; dependencies may use dynamic linking when needed.
 * `ZBAR_DYLIB_STDCPP`: Set it to anything but `0` to also link `stdc++` dynamically.
 
-When none of `ZBAR_LIB_DIRS`, `ZBAR_INCLUDE_DIRS` and `ZBAR_DIR` is set, `pkg-config` is used to find ZBar.
+Automatic library discovery preserves the frameworks, library files and linker arguments reported by `pkg-config`.
+With manual linking, `ZBAR_LIBS` must contain the complete library list.
 
 ## Examples
 

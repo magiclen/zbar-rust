@@ -60,7 +60,7 @@ unsafe extern "C" {
     /// Sets how much diagnostic output ZBar writes to stderr. 0 disables it.
     pub fn zbar_set_verbosity(verbosity: c_int);
 
-    /// Raises the verbosity level by one.
+    /// Raises the verbosity level.
     pub fn zbar_increase_verbosity();
 
     /// Returns the static name of a symbol type, or `"UNKNOWN"`.
@@ -102,7 +102,8 @@ unsafe extern "C" {
     /// Converts an image to a new format. Returns null when the conversion is not supported.
     pub fn zbar_image_convert(image: *const zbar_image_t, format: c_ulong) -> *mut zbar_image_t;
 
-    /// Converts and rescales an image in one step. Returns null when the conversion is not supported.
+    /// Converts an image and crops or pads it to the requested size without scaling.
+    /// Returns null when the conversion is not supported.
     pub fn zbar_image_convert_resize(
         image: *const zbar_image_t,
         format: c_ulong,

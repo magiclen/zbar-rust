@@ -2,7 +2,9 @@ use qrcode_generator::{
     Renderer,
     qr::{Encoder, ErrorCorrection},
 };
-use zbar_rust::{ZBarConfig, ZBarImage, ZBarImageScanner, ZBarOrientation, ZBarSymbolType};
+use zbar_rust::{
+    ZBarConfig, ZBarError, ZBarImage, ZBarImageScanner, ZBarOrientation, ZBarSymbolType,
+};
 
 const URL: &str = "https://magiclen.org";
 
@@ -24,6 +26,19 @@ fn set_config() {
     let mut scanner = ZBarImageScanner::new();
     scanner.set_config(ZBarSymbolType::ZBarNone, ZBarConfig::ZBarCfgEnable, 0).unwrap();
     scanner.set_config(ZBarSymbolType::ZBarQRCode, ZBarConfig::ZBarCfgEnable, 1).unwrap();
+    scanner.set_config(ZBarSymbolType::ZBarQRCode, ZBarConfig::ZBarCfgUncertainty, 2).unwrap();
+
+    for symbology in [
+        ZBarSymbolType::ZBarSymbol,
+        ZBarSymbolType::ZBarAddOn2,
+        ZBarSymbolType::ZBarAddOn5,
+        ZBarSymbolType::ZBarAddOn,
+    ] {
+        assert_eq!(
+            Err(ZBarError::InvalidConfig),
+            scanner.set_config(symbology, ZBarConfig::ZBarCfgUncertainty, 2)
+        );
+    }
 }
 
 #[test]

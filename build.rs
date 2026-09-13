@@ -1,6 +1,6 @@
-use std::{collections::HashSet, env, path::PathBuf, sync::OnceLock};
+use std::{env, path::PathBuf};
 
-const MIN_VERSION: &str = "0.10";
+const MIN_VERSION: &str = "0.22";
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
@@ -18,31 +18,66 @@ fn main() {
     }
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let prefix = env::var_os("ZBAR_DIR").map(PathBuf::from);
+    let lib_dirs = env::var_os("ZBAR_LIB_DIRS")
+        .map(|dirs| env::split_paths(&dirs).collect::<Vec<_>>())
+        .or_else(|| prefix.as_ref().map(|dir| vec![dir.join("lib")]))
+        .or_else(|| (target_os == "freebsd").then(|| vec![PathBuf::from("/usr/lib")]));
+    let include_dirs = env::var_os("ZBAR_INCLUDE_DIRS")
+        .map(|dirs| env::split_paths(&dirs).collect::<Vec<_>>())
+        .or_else(|| prefix.as_ref().map(|dir| vec![dir.join("include")]))
+        .or_else(|| (target_os == "freebsd").then(|| vec![PathBuf::from("/usr/include")]));
+    let libs = env::var("ZBAR_LIBS")
+        .ok()
+        .map(|libs| libs.split(':').map(str::to_string).collect::<Vec<_>>());
+    let forced_static = env::var_os("ZBAR_STATIC").map(|value| value != "0");
 
-    let lib_dirs = find_zbar_lib_dirs(&target_os);
+    let include_dirs = if lib_dirs.is_none() && libs.is_none() {
+        let statik = forced_static.unwrap_or_else(|| {
+            let library = run_pkg_config(false);
 
-    for d in &lib_dirs {
-        if !d.exists() {
-            panic!("ZBar library directory does not exist: {}", d.display());
+            if library.libs.iter().any(|lib| lib == "zbar") {
+                has_static(&library.link_paths, "zbar") && !has_dylib(&library.link_paths, "zbar")
+            } else {
+                library.link_files.iter().any(|file| is_archive(&file.to_string_lossy()))
+                    || library.libs.iter().any(|lib| lib.strip_prefix(':').is_some_and(is_archive))
+            }
+        });
+
+        let library = run_pkg_config(statik);
+        link_pkg_config(&library, statik);
+
+        include_dirs.unwrap_or(library.include_paths)
+    } else {
+        let mut library = None;
+        let lib_dirs = lib_dirs.unwrap_or_else(|| {
+            library
+                .get_or_insert_with(|| run_pkg_config(forced_static.unwrap_or(false)))
+                .link_paths
+                .clone()
+        });
+        let libs = libs.unwrap_or_else(|| vec!["zbar".to_string()]);
+
+        for dir in &lib_dirs {
+            assert!(dir.is_dir(), "ZBar library directory does not exist: {}", dir.display());
+            println!("cargo:rustc-link-search=native={}", dir.display());
         }
-        println!("cargo:rustc-link-search=native={}", d.display());
-    }
 
-    let include_dirs = find_zbar_include_dirs(&target_os);
+        let statik = forced_static.unwrap_or_else(|| determine_static(&lib_dirs, &libs));
+        let kind = if statik { "static" } else { "dylib" };
 
-    for d in &include_dirs {
-        if !d.exists() {
-            panic!("ZBar include directory does not exist: {}", d.display());
+        for lib in &libs {
+            println!("cargo:rustc-link-lib={kind}={lib}");
         }
-        println!("cargo:include={}", d.display());
-    }
 
-    let libs = find_zbar_libs(&target_os);
+        include_dirs.unwrap_or_else(|| {
+            library.get_or_insert_with(|| run_pkg_config(statik)).include_paths.clone()
+        })
+    };
 
-    let kind = determine_mode(&lib_dirs, libs.as_slice());
-
-    for lib in libs {
-        println!("cargo:rustc-link-lib={kind}={lib}");
+    for dir in &include_dirs {
+        assert!(dir.is_dir(), "ZBar include directory does not exist: {}", dir.display());
+        println!("cargo:include={}", dir.display());
     }
 
     match env::var("ZBAR_DYLIB_STDCPP").as_deref() {
@@ -51,105 +86,99 @@ fn main() {
     }
 }
 
-fn split_dirs(dirs: &str) -> Vec<PathBuf> {
-    dirs.split(':').map(PathBuf::from).collect()
+fn has_static(dirs: &[PathBuf], lib: &str) -> bool {
+    dirs.iter().any(|dir| {
+        dir.join(format!("lib{lib}.a")).is_file() || dir.join(format!("{lib}.lib")).is_file()
+    })
 }
 
-fn find_zbar_lib_dirs(target_os: &str) -> Vec<PathBuf> {
-    if let Ok(dirs) = env::var("ZBAR_LIB_DIRS") {
-        return split_dirs(&dirs);
-    }
-
-    if let Ok(dir) = env::var("ZBAR_DIR") {
-        return vec![PathBuf::from(dir).join("lib")];
-    }
-
-    if target_os == "freebsd" {
-        return vec![PathBuf::from("/usr/lib")];
-    }
-
-    run_pkg_config().link_paths.clone()
+fn has_dylib(dirs: &[PathBuf], lib: &str) -> bool {
+    dirs.iter().any(|dir| {
+        dir.join(format!("lib{lib}.so")).is_file()
+            || dir.join(format!("{lib}.dll")).is_file()
+            || dir.join(format!("lib{lib}.dylib")).is_file()
+    })
 }
 
-fn find_zbar_include_dirs(target_os: &str) -> Vec<PathBuf> {
-    if let Ok(dirs) = env::var("ZBAR_INCLUDE_DIRS") {
-        return split_dirs(&dirs);
-    }
-
-    if let Ok(dir) = env::var("ZBAR_DIR") {
-        return vec![PathBuf::from(dir).join("include")];
-    }
-
-    if target_os == "freebsd" {
-        return vec![PathBuf::from("/usr/include")];
-    }
-
-    run_pkg_config().include_paths.clone()
-}
-
-fn find_zbar_libs(target_os: &str) -> Vec<String> {
-    if let Ok(libs) = env::var("ZBAR_LIBS") {
-        return libs.split(':').map(str::to_string).collect();
-    }
-
-    // pkg-config is not usually available for these targets.
-    if target_os == "windows" || target_os == "freebsd" {
-        return vec!["zbar".to_string()];
-    }
-
-    run_pkg_config().libs.clone()
-}
-
-fn determine_mode<T: AsRef<str>>(libdirs: &[PathBuf], libs: &[T]) -> &'static str {
-    match env::var("ZBAR_STATIC").as_deref() {
-        Ok("0") => return "dylib",
-        Ok(_) => return "static",
-        Err(_) => (),
-    }
-
-    let files = libdirs
-        .iter()
-        .flat_map(|d| {
-            d.read_dir().unwrap_or_else(|error| {
-                panic!("Couldn't read the ZBar library directory {}: {error}", d.display())
-            })
-        })
-        .filter_map(|e| e.ok())
-        .map(|e| e.file_name())
-        .filter_map(|e| e.into_string().ok())
-        .collect::<HashSet<_>>();
-
-    let can_static = libs.iter().all(|l| {
-        files.contains(&format!("lib{}.a", l.as_ref()))
-            || files.contains(&format!("{}.lib", l.as_ref()))
-    });
-    let can_dylib = libs.iter().all(|l| {
-        files.contains(&format!("lib{}.so", l.as_ref()))
-            || files.contains(&format!("{}.dll", l.as_ref()))
-            || files.contains(&format!("lib{}.dylib", l.as_ref()))
-    });
+fn determine_static(dirs: &[PathBuf], libs: &[String]) -> bool {
+    let can_static = libs.iter().all(|lib| has_static(dirs, lib));
+    let can_dylib = libs.iter().all(|lib| has_dylib(dirs, lib));
 
     match (can_static, can_dylib) {
-        (true, false) => "static",
-        (false, true) => "dylib",
+        (_, true) => false,
+        (true, false) => true,
         (false, false) => {
             panic!(
-                "ZBar libdirs at `{libdirs:?}` do not contain the required files to either \
+                "ZBar libdirs at `{dirs:?}` do not contain the required files to either \
                  statically or dynamically link ZBar"
             );
         },
-        (true, true) => "dylib",
     }
 }
 
-fn run_pkg_config() -> &'static pkg_config::Library {
-    static LIBRARY: OnceLock<pkg_config::Library> = OnceLock::new();
+fn link_pkg_config(library: &pkg_config::Library, statik: bool) {
+    for dir in &library.link_paths {
+        println!("cargo:rustc-link-search=native={}", dir.display());
+    }
 
-    LIBRARY.get_or_init(|| {
-        pkg_config::Config::new()
-            .cargo_metadata(false)
-            .atleast_version(MIN_VERSION)
-            .probe("zbar")
-            .expect("Couldn't find ZBar with pkg-config")
-    })
+    for dir in &library.framework_paths {
+        println!("cargo:rustc-link-search=framework={}", dir.display());
+    }
+
+    for lib in &library.libs {
+        if let Some(name) = lib.strip_prefix(':') {
+            link_file_name(name, statik);
+            continue;
+        }
+
+        let kind = if statik
+            && (lib == "zbar"
+                || (has_static(&library.link_paths, lib) && !has_dylib(&library.link_paths, lib)))
+        {
+            "static"
+        } else {
+            "dylib"
+        };
+
+        println!("cargo:rustc-link-lib={kind}={lib}");
+    }
+
+    for framework in &library.frameworks {
+        println!("cargo:rustc-link-lib=framework={framework}");
+    }
+
+    for file in &library.link_files {
+        let dir = file.parent().unwrap();
+        let name = file.file_name().unwrap().to_string_lossy();
+
+        // Keep the exact file name and pass the library on to downstream Rust crates.
+        println!("cargo:rustc-link-search=native={}", dir.display());
+        link_file_name(&name, statik);
+    }
+
+    for args in &library.ld_args {
+        if !args.is_empty() {
+            println!("cargo:rustc-link-arg=-Wl,{}", args.join(","));
+        }
+    }
+}
+
+fn is_archive(name: &str) -> bool {
+    name.ends_with(".a") && !name.ends_with(".dll.a")
+}
+
+fn link_file_name(name: &str, statik: bool) {
+    let kind =
+        if is_archive(name) || (statik && name.ends_with(".lib")) { "static" } else { "dylib" };
+
+    println!("cargo:rustc-link-lib={kind}:+verbatim={name}");
+}
+
+fn run_pkg_config(statik: bool) -> pkg_config::Library {
+    pkg_config::Config::new()
+        .statik(statik)
+        .cargo_metadata(false)
+        .atleast_version(MIN_VERSION)
+        .probe("zbar")
+        .expect("Couldn't find ZBar 0.22 or later with pkg-config")
 }
