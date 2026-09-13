@@ -9,7 +9,7 @@ jobs:
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: nightly
@@ -24,7 +24,7 @@ jobs:
           sudo apt update
           sudo apt install libzbar-dev
           sudo ln -s /usr/lib/x86_64-linux-gnu/libzbar.so /usr/lib
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy
@@ -49,7 +49,7 @@ jobs:
           sudo apt update
           sudo apt install libzbar-dev
           sudo ln -s /usr/lib/x86_64-linux-gnu/libzbar.so /usr/lib
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -74,7 +74,7 @@ jobs:
           sudo apt update
           sudo apt install libzbar-dev
           sudo ln -s /usr/lib/x86_64-linux-gnu/libzbar.so /usr/lib
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
